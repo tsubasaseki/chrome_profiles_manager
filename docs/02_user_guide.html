@@ -1,0 +1,279 @@
+﻿<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChromeProfilesManager ユーザーガイド</title>
+<style>
+:root { color-scheme: light; }
+body { margin: 0; font-family: "Segoe UI", Meiryo, sans-serif; line-height: 1.75; color: #1f2933; background: #f4f7fa; }
+main { max-width: 980px; margin: 0 auto; padding: 32px 22px 56px; background: #ffffff; min-height: 100vh; box-sizing: border-box; }
+h1 { font-size: 28px; line-height: 1.35; margin: 0 0 24px; padding-bottom: 12px; border-bottom: 2px solid #d9e2ec; }
+h2 { font-size: 21px; margin: 34px 0 12px; padding-left: 10px; border-left: 5px solid #2f80ed; }
+h3 { font-size: 17px; margin: 26px 0 10px; }
+p { margin: 10px 0; }
+ul, ol { margin: 10px 0 16px 1.6em; padding: 0; }
+li { margin: 5px 0; }
+code { font-family: Consolas, "Courier New", monospace; background: #eef3f8; border: 1px solid #d9e2ec; padding: 1px 5px; border-radius: 4px; }
+details { margin-top: 40px; border: 1px solid #d9e2ec; background: #f8fafc; padding: 14px 16px; }
+summary { cursor: pointer; font-weight: 600; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Courier New", monospace; font-size: 13px; line-height: 1.6; }
+.meta { color: #52616b; font-size: 13px; margin-bottom: 18px; }
+</style>
+</head>
+<body>
+<main>
+<div class="meta">生成元: 02_user_guide.md</div>
+<h1>ChromeProfilesManager ユーザーガイド</h1>
+<p>この文書は、現在の実装に合わせた ChromeProfilesManager の使い方を説明します。</p>
+<h2>1. アプリの目的</h2>
+<p>ChromeProfilesManager は、Windows 上の Google Chrome プロファイルを整理するための GUI アプリです。</p>
+<p>主な目的は次の通りです。</p>
+<ul>
+<li>現在の Chrome プロファイルを確認する。</li>
+<li>プロファイル一覧の確認用 HTML を作成する。</li>
+<li>HTML を含む ZIP バックアップを作成する。</li>
+<li>不要なプロファイルを完全削除ではなく隔離フォルダへ移動する。</li>
+<li>CCleaner などでキャッシュを削除した後、移行用の原本バックアップを作成する。</li>
+</ul>
+<h2>2. 起動方法</h2>
+<p>次のファイルをダブルクリックして起動します。</p>
+<ul>
+<li><code>Start-ChromeProfilesManager.vbs</code></li>
+</ul>
+<p>この起動方法では、黒い console 画面を表示せずにアプリを起動します。</p>
+<p>VBS ランチャーは、同じフォルダにある <code>ChromeProfilesManager.ps1</code> を PowerShell で起動します。</p>
+<h2>3. 既定の対象フォルダ</h2>
+<p>Chrome の User Data フォルダの既定値は次の通りです。</p>
+<ul>
+<li><code>%LOCALAPPDATA%\Google\Chrome\User Data</code></li>
+</ul>
+<p>バックアップ先の既定値は次の通りです。</p>
+<ul>
+<li><code>Documents\ChromeProfilesManagerBackups</code></li>
+</ul>
+<p>画面上部の <code>Chromeデータ</code> と <code>バックアップ先</code> の欄で、必要に応じて変更できます。</p>
+<h2>4. 画面の主な項目</h2>
+<p>画面上部には次の項目があります。</p>
+<ul>
+<li><code>Chromeデータ</code>: Chrome User Data フォルダの場所</li>
+<li><code>バックアップ先</code>: ZIP と HTML を保存するフォルダ</li>
+<li><code>選択</code>: フォルダ選択ダイアログを開く</li>
+<li><code>開く</code>: 指定フォルダを Explorer で開く</li>
+</ul>
+<p>操作ボタンは次の通りです。</p>
+<ul>
+<li><code>再読み込み</code>: 現在のプロファイル一覧を読み直す</li>
+<li><code>Chrome終了</code>: Chrome に終了を依頼し、必要に応じて強制終了を確認する</li>
+<li><code>HTML作成</code>: 現在の一覧から確認用 HTML を作成する</li>
+<li><code>初回ZIP保存</code>: 初回バックアップ用の ZIP を作成する</li>
+<li><code>清掃後ZIP保存</code>: CCleaner などで清掃した後の原本バックアップ ZIP を作成する</li>
+<li><code>選択を隔離</code>: チェックしたプロファイルを隔離フォルダへ移動する</li>
+<li><code>選択を開く</code>: 一覧で選択中のプロファイルフォルダを Explorer で開く</li>
+</ul>
+<p>ZIP 欄には次の操作があります。</p>
+<ul>
+<li><code>更新</code>: バックアップ先フォルダ内の ZIP 一覧を更新する</li>
+<li><code>内容確認</code>: 選択した ZIP の中身を一覧表示する</li>
+</ul>
+<h2>5. プロファイル一覧に表示される情報</h2>
+<p>プロファイル一覧には次の列があります。</p>
+<ul>
+<li><code>アイコン</code>: ローカルに保存されているプロフィール画像</li>
+<li><code>ディレクトリ</code>: <code>Default</code>、<code>Profile 1</code> などのフォルダ名</li>
+<li><code>表示名</code>: <code>Local State</code> から取得した Chrome の表示名</li>
+<li><code>ProfileName</code>: 各プロファイルの <code>Preferences</code> から取得した profile name</li>
+<li><code>ログインユーザー</code>: 取得できる場合はメールアドレスなど</li>
+<li><code>Google名</code>: 取得できる場合は Google アカウント名</li>
+<li><code>アイコン情報</code>: Chrome 内蔵アバターなどの <code>avatar_icon</code> 識別子</li>
+<li><code>サイズMB</code>: プロファイルフォルダの概算サイズ</li>
+<li><code>更新日時</code>: プロファイルフォルダの最終更新日時</li>
+<li><code>場所</code>: プロファイルフォルダのフルパス</li>
+</ul>
+<p>Chrome 内蔵アバター画像そのものは Chrome の内部リソースであり、直接画像として表示できない場合があります。その場合も、<code>アイコン情報</code> には識別子を表示します。</p>
+<h2>6. 推奨作業手順</h2>
+<p>推奨する整理手順は次の通りです。</p>
+<ol>
+<li>ChromeProfilesManager を起動する。</li>
+<li><code>再読み込み</code> でプロファイル一覧を確認する。</li>
+<li>必要に応じて <code>HTML作成</code> で確認用 HTML を作成する。</li>
+<li><code>初回ZIP保存</code> で最初のバックアップを作成する。</li>
+<li>不要なプロファイルにチェックを入れる。</li>
+<li><code>選択を隔離</code> で不要プロファイルを隔離フォルダへ移動する。</li>
+<li>ユーザー自身で CCleaner などを使い、Chrome キャッシュを削除する。</li>
+<li><code>清掃後ZIP保存</code> で移行作業などに使う原本バックアップを作成する。</li>
+</ol>
+<h2>7. バックアップ ZIP の仕様</h2>
+<p>ZIP バックアップには次の内容が含まれます。</p>
+<ul>
+<li><code>ChromeProfilesReport.html</code></li>
+<li><code>Local State</code></li>
+<li><code>Profiles/&lt;プロファイルディレクトリ名&gt;/...</code> 配下の各プロファイルファイル</li>
+</ul>
+<p>ZIP ファイル名にはステージと日時が含まれます。</p>
+<p>例:</p>
+<ul>
+<li><code>ChromeProfilesBackup_initial_20260630_001500.zip</code></li>
+<li><code>ChromeProfilesBackup_post-cleanup_20260630_002000.zip</code></li>
+</ul>
+<p>Chrome 起動中でもバックアップは実行できますが、ロック中のファイルがスキップされたり、不整合なバックアップになる可能性があります。そのため、Chrome 起動中は警告を表示します。</p>
+<h2>8. 隔離の仕様</h2>
+<p><code>選択を隔離</code> は、プロファイルを完全削除しません。</p>
+<p>選択されたプロファイルは、Chrome User Data フォルダ配下の次の場所へ移動されます。</p>
+<ul>
+<li><code>_ChromeProfilesManager_Quarantine\&lt;日時&gt;\&lt;プロファイルディレクトリ名&gt;</code></li>
+</ul>
+<p>Chrome 起動中の隔離操作はブロックされます。</p>
+<p>バックアップ ZIP が存在しない状態での隔離操作もブロックされます。</p>
+<h2>9. 非同期読み込み</h2>
+<p>起動直後のプロファイル読み込みは、GUI と分離して非同期で実行されます。</p>
+<p>現在の実装では、PowerShell の Runspace を明示的に作り、WinForms の Timer で完了を監視します。</p>
+<p>これにより、起動直後に画面が固まって見える問題を抑えています。</p>
+<h2>10. 注意事項</h2>
+<p>実プロファイルを扱う前に、必ず初回 ZIP バックアップを作成してください。</p>
+<p>Chrome 起動中は、プロファイルファイルがロックされる場合があります。可能な限り Chrome を終了してからバックアップや隔離を行ってください。</p>
+<p>隔離したプロファイルを完全に削除する機能は、現在の実装にはありません。不要であることを別途確認してから、ユーザー自身が隔離フォルダを削除してください。</p>
+
+<details>
+<summary>対応するMarkdown原文</summary>
+<pre># ChromeProfilesManager ユーザーガイド
+
+この文書は、現在の実装に合わせた ChromeProfilesManager の使い方を説明します。
+
+## 1. アプリの目的
+
+ChromeProfilesManager は、Windows 上の Google Chrome プロファイルを整理するための GUI アプリです。
+
+主な目的は次の通りです。
+
+- 現在の Chrome プロファイルを確認する。
+- プロファイル一覧の確認用 HTML を作成する。
+- HTML を含む ZIP バックアップを作成する。
+- 不要なプロファイルを完全削除ではなく隔離フォルダへ移動する。
+- CCleaner などでキャッシュを削除した後、移行用の原本バックアップを作成する。
+
+## 2. 起動方法
+
+次のファイルをダブルクリックして起動します。
+
+- `Start-ChromeProfilesManager.vbs`
+
+この起動方法では、黒い console 画面を表示せずにアプリを起動します。
+
+VBS ランチャーは、同じフォルダにある `ChromeProfilesManager.ps1` を PowerShell で起動します。
+
+## 3. 既定の対象フォルダ
+
+Chrome の User Data フォルダの既定値は次の通りです。
+
+- `%LOCALAPPDATA%\Google\Chrome\User Data`
+
+バックアップ先の既定値は次の通りです。
+
+- `Documents\ChromeProfilesManagerBackups`
+
+画面上部の `Chromeデータ` と `バックアップ先` の欄で、必要に応じて変更できます。
+
+## 4. 画面の主な項目
+
+画面上部には次の項目があります。
+
+- `Chromeデータ`: Chrome User Data フォルダの場所
+- `バックアップ先`: ZIP と HTML を保存するフォルダ
+- `選択`: フォルダ選択ダイアログを開く
+- `開く`: 指定フォルダを Explorer で開く
+
+操作ボタンは次の通りです。
+
+- `再読み込み`: 現在のプロファイル一覧を読み直す
+- `Chrome終了`: Chrome に終了を依頼し、必要に応じて強制終了を確認する
+- `HTML作成`: 現在の一覧から確認用 HTML を作成する
+- `初回ZIP保存`: 初回バックアップ用の ZIP を作成する
+- `清掃後ZIP保存`: CCleaner などで清掃した後の原本バックアップ ZIP を作成する
+- `選択を隔離`: チェックしたプロファイルを隔離フォルダへ移動する
+- `選択を開く`: 一覧で選択中のプロファイルフォルダを Explorer で開く
+
+ZIP 欄には次の操作があります。
+
+- `更新`: バックアップ先フォルダ内の ZIP 一覧を更新する
+- `内容確認`: 選択した ZIP の中身を一覧表示する
+
+## 5. プロファイル一覧に表示される情報
+
+プロファイル一覧には次の列があります。
+
+- `アイコン`: ローカルに保存されているプロフィール画像
+- `ディレクトリ`: `Default`、`Profile 1` などのフォルダ名
+- `表示名`: `Local State` から取得した Chrome の表示名
+- `ProfileName`: 各プロファイルの `Preferences` から取得した profile name
+- `ログインユーザー`: 取得できる場合はメールアドレスなど
+- `Google名`: 取得できる場合は Google アカウント名
+- `アイコン情報`: Chrome 内蔵アバターなどの `avatar_icon` 識別子
+- `サイズMB`: プロファイルフォルダの概算サイズ
+- `更新日時`: プロファイルフォルダの最終更新日時
+- `場所`: プロファイルフォルダのフルパス
+
+Chrome 内蔵アバター画像そのものは Chrome の内部リソースであり、直接画像として表示できない場合があります。その場合も、`アイコン情報` には識別子を表示します。
+
+## 6. 推奨作業手順
+
+推奨する整理手順は次の通りです。
+
+1. ChromeProfilesManager を起動する。
+2. `再読み込み` でプロファイル一覧を確認する。
+3. 必要に応じて `HTML作成` で確認用 HTML を作成する。
+4. `初回ZIP保存` で最初のバックアップを作成する。
+5. 不要なプロファイルにチェックを入れる。
+6. `選択を隔離` で不要プロファイルを隔離フォルダへ移動する。
+7. ユーザー自身で CCleaner などを使い、Chrome キャッシュを削除する。
+8. `清掃後ZIP保存` で移行作業などに使う原本バックアップを作成する。
+
+## 7. バックアップ ZIP の仕様
+
+ZIP バックアップには次の内容が含まれます。
+
+- `ChromeProfilesReport.html`
+- `Local State`
+- `Profiles/&lt;プロファイルディレクトリ名&gt;/...` 配下の各プロファイルファイル
+
+ZIP ファイル名にはステージと日時が含まれます。
+
+例:
+
+- `ChromeProfilesBackup_initial_20260630_001500.zip`
+- `ChromeProfilesBackup_post-cleanup_20260630_002000.zip`
+
+Chrome 起動中でもバックアップは実行できますが、ロック中のファイルがスキップされたり、不整合なバックアップになる可能性があります。そのため、Chrome 起動中は警告を表示します。
+
+## 8. 隔離の仕様
+
+`選択を隔離` は、プロファイルを完全削除しません。
+
+選択されたプロファイルは、Chrome User Data フォルダ配下の次の場所へ移動されます。
+
+- `_ChromeProfilesManager_Quarantine\&lt;日時&gt;\&lt;プロファイルディレクトリ名&gt;`
+
+Chrome 起動中の隔離操作はブロックされます。
+
+バックアップ ZIP が存在しない状態での隔離操作もブロックされます。
+
+## 9. 非同期読み込み
+
+起動直後のプロファイル読み込みは、GUI と分離して非同期で実行されます。
+
+現在の実装では、PowerShell の Runspace を明示的に作り、WinForms の Timer で完了を監視します。
+
+これにより、起動直後に画面が固まって見える問題を抑えています。
+
+## 10. 注意事項
+
+実プロファイルを扱う前に、必ず初回 ZIP バックアップを作成してください。
+
+Chrome 起動中は、プロファイルファイルがロックされる場合があります。可能な限り Chrome を終了してからバックアップや隔離を行ってください。
+
+隔離したプロファイルを完全に削除する機能は、現在の実装にはありません。不要であることを別途確認してから、ユーザー自身が隔離フォルダを削除してください。
+</pre>
+</details>
+</main>
+</body>
+</html>

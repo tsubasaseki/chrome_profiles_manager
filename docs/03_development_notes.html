@@ -1,0 +1,354 @@
+﻿<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChromeProfilesManager 開発メモ</title>
+<style>
+:root { color-scheme: light; }
+body { margin: 0; font-family: "Segoe UI", Meiryo, sans-serif; line-height: 1.75; color: #1f2933; background: #f4f7fa; }
+main { max-width: 980px; margin: 0 auto; padding: 32px 22px 56px; background: #ffffff; min-height: 100vh; box-sizing: border-box; }
+h1 { font-size: 28px; line-height: 1.35; margin: 0 0 24px; padding-bottom: 12px; border-bottom: 2px solid #d9e2ec; }
+h2 { font-size: 21px; margin: 34px 0 12px; padding-left: 10px; border-left: 5px solid #2f80ed; }
+h3 { font-size: 17px; margin: 26px 0 10px; }
+p { margin: 10px 0; }
+ul, ol { margin: 10px 0 16px 1.6em; padding: 0; }
+li { margin: 5px 0; }
+code { font-family: Consolas, "Courier New", monospace; background: #eef3f8; border: 1px solid #d9e2ec; padding: 1px 5px; border-radius: 4px; }
+details { margin-top: 40px; border: 1px solid #d9e2ec; background: #f8fafc; padding: 14px 16px; }
+summary { cursor: pointer; font-weight: 600; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Courier New", monospace; font-size: 13px; line-height: 1.6; }
+.meta { color: #52616b; font-size: 13px; margin-bottom: 18px; }
+</style>
+</head>
+<body>
+<main>
+<div class="meta">生成元: 03_development_notes.md</div>
+<h1>ChromeProfilesManager 開発メモ</h1>
+<p>この文書は、現在の実装に合わせた開発・保守用メモです。</p>
+<h2>1. 実装方式</h2>
+<p>ChromeProfilesManager は、PowerShell 5.1 + WinForms で実装されています。</p>
+<p><code>.NET SDK</code> がない環境でも動作できるように、WPF や C# プロジェクトではなく、単体の <code>.ps1</code> と <code>.vbs</code> ランチャーで構成しています。</p>
+<p>主要ファイルは次の通りです。</p>
+<ul>
+<li><code>ChromeProfilesManager.ps1</code>: GUI と機能本体</li>
+<li><code>Start-ChromeProfilesManager.vbs</code>: 黒い console を出さない起動ランチャー</li>
+<li><code>README.md</code>: ルートの簡易説明</li>
+<li><code>docs/*.md</code>: 詳細ドキュメント</li>
+<li><code>docs/*.html</code>: Markdown と対応する SingleFileHTML</li>
+</ul>
+<h2>2. 文字コード</h2>
+<p><code>ChromeProfilesManager.ps1</code> は UTF-8 BOM 付きで保存します。</p>
+<p>理由は、PowerShell 5.1 が BOM なし UTF-8 の日本語文字列を環境によって正しく解釈できず、構文エラーや文字化けを起こすためです。</p>
+<p>Markdown と HTML も UTF-8 として扱います。</p>
+<h2>3. プロファイル検出</h2>
+<p>プロファイル検出は <code>Get-ChromeProfiles</code> が担当します。</p>
+<p>対象 User Data フォルダの既定値は次の通りです。</p>
+<ul>
+<li><code>%LOCALAPPDATA%\Google\Chrome\User Data</code></li>
+</ul>
+<p>候補プロファイルは次の条件で検出します。</p>
+<ul>
+<li><code>Local State</code> の <code>profile.info_cache</code> に存在するディレクトリ</li>
+<li><code>Default</code></li>
+<li><code>Profile *</code></li>
+<li><code>Preferences</code> ファイルを持つディレクトリ</li>
+</ul>
+<h2>4. 取得するプロファイル情報</h2>
+<p><code>Local State</code> から取得する情報は次の通りです。</p>
+<ul>
+<li>ディレクトリ名</li>
+<li>表示名</li>
+<li><code>user_name</code></li>
+<li><code>gaia_name</code></li>
+<li><code>avatar_icon</code></li>
+</ul>
+<p>各プロファイルの <code>Preferences</code> から取得する情報は次の通りです。</p>
+<ul>
+<li><code>profile.name</code></li>
+<li><code>account_info[0].email</code></li>
+<li><code>account_info[0].full_name</code></li>
+<li><code>account_info[0].given_name</code></li>
+</ul>
+<p>アイコン画像は、各プロファイルフォルダに次のようなファイルが存在する場合に読み込みます。</p>
+<ul>
+<li><code>Google Profile Picture.png</code></li>
+<li><code>Google Profile Picture</code></li>
+<li><code>Profile Picture.png</code></li>
+<li><code>Account Avatar.png</code></li>
+<li><code>Avatar.png</code></li>
+</ul>
+<h2>5. 非同期読み込み</h2>
+<p>起動直後の GUI 固まりを避けるため、プロファイル読み込みは非同期化しています。</p>
+<p>以前は <code>BackgroundWorker</code> を使いましたが、PowerShell 5.1 では別スレッドに既定 Runspace がなく、スクリプトブロック実行時にエラーが発生しました。</p>
+<p>現在は次の方式です。</p>
+<ul>
+<li><code>System.Management.Automation.PowerShell]::Create()</code> で非同期実行用 PowerShell を作成する。</li>
+<li>必要な関数定義を文字列として worker script に含める。</li>
+<li><code>BeginInvoke()</code> で読み込みを開始する。</li>
+<li>WinForms <code>Timer</code> で完了を監視する。</li>
+<li>完了後に <code>EndInvoke()</code> で結果を受け取る。</li>
+<li>UI 更新はメインスレッド側で行う。</li>
+<li>PowerShell インスタンスと Timer は完了後に破棄する。</li>
+</ul>
+<p>バックグラウンド側では画像オブジェクトを作らず、アイコン画像のパスだけを返します。画像の読み込みとリサイズは UI 側で実行します。</p>
+<h2>6. バックアップ作成</h2>
+<p>ZIP バックアップは <code>New-ProfilesZipBackup</code> が担当します。</p>
+<p>ZIP には次の内容を含めます。</p>
+<ul>
+<li><code>ChromeProfilesReport.html</code></li>
+<li><code>Local State</code></li>
+<li><code>Profiles/&lt;プロファイルディレクトリ名&gt;/...</code></li>
+</ul>
+<p>ファイル追加時にロックや権限などで読み込めないファイルはスキップし、ログに記録します。</p>
+<p>Chrome 起動中にバックアップしようとした場合は警告を出します。</p>
+<h2>7. HTML レポート</h2>
+<p>確認用 HTML は <code>New-ProfileIndexHtmlText</code> が生成します。</p>
+<p>HTML に含める主な情報は次の通りです。</p>
+<ul>
+<li>作成日時</li>
+<li>ステージ</li>
+<li>User Data フォルダ</li>
+<li>プロファイル数</li>
+<li>ディレクトリ</li>
+<li>表示名</li>
+<li>ProfileName</li>
+<li>ログインユーザー</li>
+<li>Google名</li>
+<li>アイコン情報</li>
+<li>サイズMB</li>
+<li>更新日時</li>
+<li>場所</li>
+</ul>
+<h2>8. 隔離処理</h2>
+<p>隔離処理は <code>Move-SelectedProfilesToQuarantine</code> が担当します。</p>
+<p>安全のため、完全削除ではなく移動だけを行います。</p>
+<p>隔離先は次の形式です。</p>
+<ul>
+<li><code>&lt;User Data&gt;\_ChromeProfilesManager_Quarantine\&lt;yyyyMMdd_HHmmss&gt;\&lt;プロファイルディレクトリ名&gt;</code></li>
+</ul>
+<p>隔離操作は次の場合にブロックします。</p>
+<ul>
+<li>Chrome が起動中</li>
+<li>プロファイル読み込み中</li>
+<li>バックアップ ZIP が存在しない</li>
+<li>対象プロファイルが選択されていない</li>
+</ul>
+<h2>9. 起動ランチャー</h2>
+<p>起動ランチャーは <code>Start-ChromeProfilesManager.vbs</code> です。</p>
+<p>このランチャーは、同じフォルダにある <code>ChromeProfilesManager.ps1</code> を次のように起動します。</p>
+<ul>
+<li><code>powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;&lt;script path&gt;&quot;</code></li>
+</ul>
+<p>これにより、黒い console 画面を表示せずに GUI を開きます。</p>
+<h2>10. 検証手順</h2>
+<p>構文チェックは次の考え方で行います。</p>
+<ul>
+<li>PowerShell の parser で <code>ChromeProfilesManager.ps1</code> を解析する。</li>
+<li>エラーがあれば修正する。</li>
+</ul>
+<p>機能確認は、実 Chrome プロファイルではなく、一時フォルダにダミーの User Data 構造を作って行います。</p>
+<p>確認する内容は次の通りです。</p>
+<ul>
+<li><code>Default</code> と <code>Profile 1</code> などを検出できること</li>
+<li><code>Local State</code> と <code>Preferences</code> から表示情報を取得できること</li>
+<li>HTML レポートを作成できること</li>
+<li>ZIP バックアップを作成できること</li>
+<li>ZIP に <code>ChromeProfilesReport.html</code> とプロファイルファイルが含まれること</li>
+<li>Runspace 非同期読み込みでプロファイル情報を取得できること</li>
+</ul>
+<h2>11. Git 状態</h2>
+<p>最初の確認時点で、<code>W:\CodexAppTools\chrome_profiles_manager</code> は Git リポジトリではありませんでした。</p>
+<p>現在は、ローカルコミットと clean なワーキングツリーを可能にするため、ローカル Git リポジトリとして初期化済みです。</p>
+<p>ただし、<code>remote origin</code> は未設定です。</p>
+<p>そのため、現時点では次の操作は実行できません。</p>
+<ul>
+<li><code>remote origin</code> からの pull</li>
+<li>GitHub push</li>
+</ul>
+<p>GitHub 連携を行うには、remote origin を設定する必要があります。</p>
+
+<details>
+<summary>対応するMarkdown原文</summary>
+<pre># ChromeProfilesManager 開発メモ
+
+この文書は、現在の実装に合わせた開発・保守用メモです。
+
+## 1. 実装方式
+
+ChromeProfilesManager は、PowerShell 5.1 + WinForms で実装されています。
+
+`.NET SDK` がない環境でも動作できるように、WPF や C# プロジェクトではなく、単体の `.ps1` と `.vbs` ランチャーで構成しています。
+
+主要ファイルは次の通りです。
+
+- `ChromeProfilesManager.ps1`: GUI と機能本体
+- `Start-ChromeProfilesManager.vbs`: 黒い console を出さない起動ランチャー
+- `README.md`: ルートの簡易説明
+- `docs/*.md`: 詳細ドキュメント
+- `docs/*.html`: Markdown と対応する SingleFileHTML
+
+## 2. 文字コード
+
+`ChromeProfilesManager.ps1` は UTF-8 BOM 付きで保存します。
+
+理由は、PowerShell 5.1 が BOM なし UTF-8 の日本語文字列を環境によって正しく解釈できず、構文エラーや文字化けを起こすためです。
+
+Markdown と HTML も UTF-8 として扱います。
+
+## 3. プロファイル検出
+
+プロファイル検出は `Get-ChromeProfiles` が担当します。
+
+対象 User Data フォルダの既定値は次の通りです。
+
+- `%LOCALAPPDATA%\Google\Chrome\User Data`
+
+候補プロファイルは次の条件で検出します。
+
+- `Local State` の `profile.info_cache` に存在するディレクトリ
+- `Default`
+- `Profile *`
+- `Preferences` ファイルを持つディレクトリ
+
+## 4. 取得するプロファイル情報
+
+`Local State` から取得する情報は次の通りです。
+
+- ディレクトリ名
+- 表示名
+- `user_name`
+- `gaia_name`
+- `avatar_icon`
+
+各プロファイルの `Preferences` から取得する情報は次の通りです。
+
+- `profile.name`
+- `account_info[0].email`
+- `account_info[0].full_name`
+- `account_info[0].given_name`
+
+アイコン画像は、各プロファイルフォルダに次のようなファイルが存在する場合に読み込みます。
+
+- `Google Profile Picture.png`
+- `Google Profile Picture`
+- `Profile Picture.png`
+- `Account Avatar.png`
+- `Avatar.png`
+
+## 5. 非同期読み込み
+
+起動直後の GUI 固まりを避けるため、プロファイル読み込みは非同期化しています。
+
+以前は `BackgroundWorker` を使いましたが、PowerShell 5.1 では別スレッドに既定 Runspace がなく、スクリプトブロック実行時にエラーが発生しました。
+
+現在は次の方式です。
+
+- `System.Management.Automation.PowerShell]::Create()` で非同期実行用 PowerShell を作成する。
+- 必要な関数定義を文字列として worker script に含める。
+- `BeginInvoke()` で読み込みを開始する。
+- WinForms `Timer` で完了を監視する。
+- 完了後に `EndInvoke()` で結果を受け取る。
+- UI 更新はメインスレッド側で行う。
+- PowerShell インスタンスと Timer は完了後に破棄する。
+
+バックグラウンド側では画像オブジェクトを作らず、アイコン画像のパスだけを返します。画像の読み込みとリサイズは UI 側で実行します。
+
+## 6. バックアップ作成
+
+ZIP バックアップは `New-ProfilesZipBackup` が担当します。
+
+ZIP には次の内容を含めます。
+
+- `ChromeProfilesReport.html`
+- `Local State`
+- `Profiles/&lt;プロファイルディレクトリ名&gt;/...`
+
+ファイル追加時にロックや権限などで読み込めないファイルはスキップし、ログに記録します。
+
+Chrome 起動中にバックアップしようとした場合は警告を出します。
+
+## 7. HTML レポート
+
+確認用 HTML は `New-ProfileIndexHtmlText` が生成します。
+
+HTML に含める主な情報は次の通りです。
+
+- 作成日時
+- ステージ
+- User Data フォルダ
+- プロファイル数
+- ディレクトリ
+- 表示名
+- ProfileName
+- ログインユーザー
+- Google名
+- アイコン情報
+- サイズMB
+- 更新日時
+- 場所
+
+## 8. 隔離処理
+
+隔離処理は `Move-SelectedProfilesToQuarantine` が担当します。
+
+安全のため、完全削除ではなく移動だけを行います。
+
+隔離先は次の形式です。
+
+- `&lt;User Data&gt;\_ChromeProfilesManager_Quarantine\&lt;yyyyMMdd_HHmmss&gt;\&lt;プロファイルディレクトリ名&gt;`
+
+隔離操作は次の場合にブロックします。
+
+- Chrome が起動中
+- プロファイル読み込み中
+- バックアップ ZIP が存在しない
+- 対象プロファイルが選択されていない
+
+## 9. 起動ランチャー
+
+起動ランチャーは `Start-ChromeProfilesManager.vbs` です。
+
+このランチャーは、同じフォルダにある `ChromeProfilesManager.ps1` を次のように起動します。
+
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;&lt;script path&gt;&quot;`
+
+これにより、黒い console 画面を表示せずに GUI を開きます。
+
+## 10. 検証手順
+
+構文チェックは次の考え方で行います。
+
+- PowerShell の parser で `ChromeProfilesManager.ps1` を解析する。
+- エラーがあれば修正する。
+
+機能確認は、実 Chrome プロファイルではなく、一時フォルダにダミーの User Data 構造を作って行います。
+
+確認する内容は次の通りです。
+
+- `Default` と `Profile 1` などを検出できること
+- `Local State` と `Preferences` から表示情報を取得できること
+- HTML レポートを作成できること
+- ZIP バックアップを作成できること
+- ZIP に `ChromeProfilesReport.html` とプロファイルファイルが含まれること
+- Runspace 非同期読み込みでプロファイル情報を取得できること
+
+## 11. Git 状態
+
+最初の確認時点で、`W:\CodexAppTools\chrome_profiles_manager` は Git リポジトリではありませんでした。
+
+現在は、ローカルコミットと clean なワーキングツリーを可能にするため、ローカル Git リポジトリとして初期化済みです。
+
+ただし、`remote origin` は未設定です。
+
+そのため、現時点では次の操作は実行できません。
+
+- `remote origin` からの pull
+- GitHub push
+
+GitHub 連携を行うには、remote origin を設定する必要があります。
+</pre>
+</details>
+</main>
+</body>
+</html>
