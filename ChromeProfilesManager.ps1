@@ -8,23 +8,49 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $script:AppName = "ChromeProfilesManager"
 $script:DefaultUserDataPath = Join-Path $env:LOCALAPPDATA "Google\Chrome\User Data"
 $script:DefaultBackupPath = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "ChromeProfilesManagerBackups"
+$script:LogFilePath = $null
+
+function Initialize-AppLogging {
+    param([string]$BackupPath = $script:DefaultBackupPath)
+
+    try {
+        $logRoot = Join-Path $BackupPath "logs"
+        if (-not (Test-Path -LiteralPath $logRoot)) {
+            New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
+        }
+        $script:LogFilePath = Join-Path $logRoot ("ChromeProfilesManager_{0}.log" -f (Get-Date -Format "yyyyMMdd"))
+        Write-UiLog "ログファイル: $script:LogFilePath"
+    } catch {
+        $script:LogFilePath = $null
+    }
+}
 
 function Write-UiLog {
-    param([string]$Message)
+    param(
+        [string]$Message,
+        [string]$Level = "INFO"
+    )
 
-    if ($null -eq $script:LogBox) {
-        return
+    $stamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+    $line = "[$stamp][$Level] $Message"
+
+    if (-not [string]::IsNullOrWhiteSpace($script:LogFilePath)) {
+        try {
+            [System.IO.File]::AppendAllText($script:LogFilePath, $line + [Environment]::NewLine, [System.Text.Encoding]::UTF8)
+        } catch {
+        }
     }
 
-    $stamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $line = "[$stamp] $Message`r`n"
-    if ($script:LogBox.InvokeRequired) {
-        [void]$script:LogBox.BeginInvoke([Action[string]]{
-            param($Text)
-            $script:LogBox.AppendText($Text)
-        }, $line)
-    } else {
-        $script:LogBox.AppendText($line)
+    if ($null -ne $script:LogBox) {
+        $uiLine = $line + "`r`n"
+        if ($script:LogBox.InvokeRequired) {
+            [void]$script:LogBox.BeginInvoke([Action[string]]{
+                param($Text)
+                $script:LogBox.AppendText($Text)
+            }, $uiLine)
+        } else {
+            $script:LogBox.AppendText($uiLine)
+        }
     }
 }
 
@@ -45,12 +71,14 @@ function Get-DirectorySizeBytes {
     param([string]$Path)
 
     $total = [int64]0
+    Write-UiLog "サイズ計算開始: $Path" "DEBUG"
     try {
         Get-ChildItem -LiteralPath $Path -Force -Recurse -File -ErrorAction SilentlyContinue |
             ForEach-Object { $total += $_.Length }
     } catch {
-        Write-UiLog "Size scan warning for '$Path': $($_.Exception.Message)"
+        Write-UiLog "サイズ計算で警告: '$Path': $($_.Exception.Message)" "WARN"
     }
+    Write-UiLog "サイズ計算完了: $Path = $total bytes" "DEBUG"
     return $total
 }
 
@@ -59,7 +87,9 @@ function Get-LocalStateProfileInfo {
 
     $profiles = @{}
     $localStatePath = Join-Path $UserDataPath "Local State"
+    Write-UiLog "Local State 読み込み開始: $localStatePath" "DEBUG"
     if (-not (Test-Path -LiteralPath $localStatePath)) {
+        Write-UiLog "Local State が見つかりません: $localStatePath" "WARN"
         return $profiles
     }
 
@@ -80,8 +110,9 @@ function Get-LocalStateProfileInfo {
                 }
             }
         }
+        Write-UiLog "Local State 読み込み完了: $($profiles.Count) 件" "DEBUG"
     } catch {
-        Write-UiLog "Local State を読み込めませんでした: $($_.Exception.Message)"
+        Write-UiLog "Local State を読み込めませんでした: $($_.Exception.Message)" "WARN"
     }
 
     return $profiles
@@ -97,7 +128,9 @@ function Get-PreferenceProfileInfo {
     }
 
     $preferencesPath = Join-Path $ProfilePath "Preferences"
+    Write-UiLog "Preferences 読み込み開始: $preferencesPath" "DEBUG"
     if (-not (Test-Path -LiteralPath $preferencesPath)) {
+        Write-UiLog "Preferences が見つかりません: $preferencesPath" "DEBUG"
         return $info
     }
 
@@ -119,8 +152,9 @@ function Get-PreferenceProfileInfo {
                 }
             }
         }
+        Write-UiLog "Preferences 読み込み完了: $preferencesPath" "DEBUG"
     } catch {
-        Write-UiLog "Preferences を読み込めませんでした: $ProfilePath"
+        Write-UiLog "Preferences を読み込めませんでした: $ProfilePath - $($_.Exception.Message)" "WARN"
     }
 
     return $info
@@ -144,6 +178,7 @@ function Get-ProfileIconImage {
         }
 
         try {
+            Write-UiLog "アイコン画像読み込み開始: $path" "DEBUG"
             $bytes = [System.IO.File]::ReadAllBytes($path)
             $memory = New-Object System.IO.MemoryStream(,$bytes)
             $image = [System.Drawing.Image]::FromStream($memory)
@@ -157,9 +192,10 @@ function Get-ProfileIconImage {
                 $image.Dispose()
                 $memory.Dispose()
             }
+            Write-UiLog "アイコン画像読み込み完了: $path" "DEBUG"
             return $bitmap
         } catch {
-            Write-UiLog "アイコン画像を読み込めませんでした: $path"
+            Write-UiLog "アイコン画像を読み込めませんでした: $path - $($_.Exception.Message)" "WARN"
         }
     }
 
@@ -194,9 +230,11 @@ function Get-ChromeProfiles {
     )
 
     if (-not (Test-Path -LiteralPath $UserDataPath)) {
+        Write-UiLog "プロファイル検出対象が存在しません: $UserDataPath" "WARN"
         return @()
     }
 
+    Write-UiLog "プロファイル検出開始: $UserDataPath" "INFO"
     $profileInfo = Get-LocalStateProfileInfo -UserDataPath $UserDataPath
     $candidateMap = @{}
 
@@ -263,9 +301,11 @@ function Get-ChromeProfiles {
             SizeMB = [math]::Round($sizeBytes / 1MB, 2)
             LastWriteTime = $item.LastWriteTime
         })
+        Write-UiLog "プロファイル検出: Directory=$directoryName DisplayName=$displayName User=$userName Path=$path Size=$sizeBytes" "DEBUG"
     }
 
-    return $profiles.ToArray()
+    Write-UiLog "プロファイル検出完了: $($profiles.Count) 件" "INFO"
+    return ,$profiles.ToArray()
 }
 
 function New-ProfileIndexHtmlText {
@@ -368,15 +408,17 @@ function Add-FileToZip {
     )
 
     try {
+        Write-UiLog "ZIP追加開始: $EntryName <= $SourceFile" "DEBUG"
         [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
             $Zip,
             $SourceFile,
             $EntryName.Replace("\", "/"),
             [System.IO.Compression.CompressionLevel]::Optimal
         ) | Out-Null
+        Write-UiLog "ZIP追加完了: $EntryName" "DEBUG"
         return $true
     } catch {
-            Write-UiLog "ロック中または読み取り不可のためスキップしました: $SourceFile"
+            Write-UiLog "ロック中または読み取り不可のためスキップしました: $SourceFile - $($_.Exception.Message)" "WARN"
         return $false
     }
 }
@@ -394,6 +436,7 @@ function New-ProfilesZipBackup {
     }
 
     $zipPath = Join-Path $BackupPath ("ChromeProfilesBackup_{0}_{1}.zip" -f $Stage, (Get-Date -Format "yyyyMMdd_HHmmss"))
+    Write-UiLog "ZIPバックアップ作成開始: Stage=$Stage Path=$zipPath ProfileCount=$($Profiles.Count)" "INFO"
     if (Test-Path -LiteralPath $zipPath) {
         Remove-Item -LiteralPath $zipPath -Force
     }
@@ -440,6 +483,7 @@ function New-ProfilesZipBackup {
         $zip.Dispose()
     }
 
+    Write-UiLog "ZIPバックアップ作成完了: Path=$zipPath Added=$added Skipped=$skipped" "INFO"
     return [pscustomobject]@{
         ZipPath = $zipPath
         AddedFiles = $added
@@ -459,7 +503,7 @@ function Get-SelectedProfilesFromGrid {
             $selected.Add($row.Tag)
         }
     }
-    return $selected.ToArray()
+    return ,$selected.ToArray()
 }
 
 function Refresh-ChromeStatus {
@@ -576,7 +620,8 @@ function Start-ProfileRefresh {
         "Get-LocalStateProfileInfo",
         "Get-PreferenceProfileInfo",
         "Get-ProfileIconPath",
-        "Get-ChromeProfiles"
+        "Get-ChromeProfiles",
+        "Write-UiLog"
     )
     $functionText = ($functionNames | ForEach-Object {
         "function $_ {`r`n$((Get-Command $_ -CommandType Function).Definition)`r`n}"
@@ -584,6 +629,8 @@ function Start-ProfileRefresh {
 
     $workerScript = @"
 param([string]`$WorkerUserDataPath)
+`$script:LogBox = `$null
+`$script:LogFilePath = '$($script:LogFilePath -replace "'", "''")'
 $functionText
 Get-ChromeProfiles -UserDataPath `$WorkerUserDataPath -SkipIconImage
 "@
@@ -602,7 +649,12 @@ Get-ChromeProfiles -UserDataPath `$WorkerUserDataPath -SkipIconImage
         $script:ProfileRefreshState.Timer.Stop()
         Set-ProfileRefreshBusy -Busy $false
         try {
-            $profiles = @($script:ProfileRefreshState.PowerShell.EndInvoke($script:ProfileRefreshState.AsyncResult))
+            $rawProfiles = @($script:ProfileRefreshState.PowerShell.EndInvoke($script:ProfileRefreshState.AsyncResult))
+            if ($rawProfiles.Count -eq 1 -and $rawProfiles[0] -is [System.Array]) {
+                $profiles = @($rawProfiles[0])
+            } else {
+                $profiles = $rawProfiles
+            }
             Set-ProfilesGridRows -Profiles $profiles
             Write-UiLog "$($profiles.Count) 件のプロファイルを読み込みました。"
             Refresh-ChromeStatus
@@ -632,7 +684,7 @@ function Get-AllProfilesFromGrid {
             $profiles.Add($row.Tag)
         }
     }
-    return $profiles.ToArray()
+    return ,$profiles.ToArray()
 }
 
 function Confirm-BackupWhenChromeRunning {
@@ -727,11 +779,21 @@ function Move-SelectedProfilesToQuarantine {
 
     $userDataPath = $script:UserDataTextBox.Text.Trim()
     $quarantineRoot = Join-Path $userDataPath "_ChromeProfilesManager_Quarantine"
-    $quarantineBatch = Join-Path $quarantineRoot (Get-Date -Format "yyyyMMdd_HHmmss")
+    $quarantineStamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $quarantineBatch = Join-Path $quarantineRoot $quarantineStamp
+    $suffix = 1
+    while (Test-Path -LiteralPath $quarantineBatch) {
+        $quarantineBatch = Join-Path $quarantineRoot ("{0}_{1:D2}" -f $quarantineStamp, $suffix)
+        $suffix++
+    }
     New-Item -ItemType Directory -Path $quarantineBatch -Force | Out-Null
+    Write-UiLog "隔離先フォルダ作成: $quarantineBatch" "INFO"
 
     foreach ($profile in $selected) {
         $destination = Join-Path $quarantineBatch $profile.DirectoryName
+        if (Test-Path -LiteralPath $destination) {
+            throw "隔離先に同名フォルダが既に存在します: $destination"
+        }
         Write-UiLog "移動中: '$($profile.Path)' -> '$destination'"
         Move-Item -LiteralPath $profile.Path -Destination $destination -Force
     }
@@ -915,6 +977,7 @@ $browseBackupButton.Add_Click({
     $path = Request-FolderPath -Description "バックアップ先フォルダを選択してください" -InitialPath $script:BackupPathTextBox.Text
     if ($path) {
         $script:BackupPathTextBox.Text = $path
+        Initialize-AppLogging -BackupPath $path
         Refresh-ZipList
     }
 })
@@ -1100,8 +1163,15 @@ $script:Form.Add_Shown({
     if (-not (Test-Path -LiteralPath $script:BackupPathTextBox.Text)) {
         New-Item -ItemType Directory -Path $script:BackupPathTextBox.Text -Force | Out-Null
     }
+    Initialize-AppLogging -BackupPath $script:BackupPathTextBox.Text
+    Write-UiLog "アプリ起動: Version=PowerShell $($PSVersionTable.PSVersion) UserData=$($script:UserDataTextBox.Text) Backup=$($script:BackupPathTextBox.Text)" "INFO"
     Start-ProfileRefresh
     Refresh-ZipList
 })
 
-[void]$script:Form.ShowDialog()
+try {
+    [void]$script:Form.ShowDialog()
+} catch {
+    Write-UiLog "未処理エラー: $($_.Exception.ToString())" "ERROR"
+    [System.Windows.Forms.MessageBox]::Show("未処理エラーが発生しました:`r`n$($_.Exception.Message)", $script:AppName, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+}
