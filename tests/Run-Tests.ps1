@@ -123,6 +123,7 @@ function Get-WorkerFunctionText {
         "Get-ProfileIconPath",
         "Get-ProfileColorPalette",
         "Get-ProfileColorInfo",
+        "Format-LastWriteTimeWithAge",
         "Get-ManagerDataPath",
         "Get-ProfileMetadataPath",
         "New-ProfileMetadataDocument",
@@ -261,7 +262,16 @@ try {
             Assert-Equal $colorIds[$i] $info.Id "色ID"
             if ($colorIds[$i]) {
                 Assert-True ($info.Hex.StartsWith("#")) "色Hexがありません。"
+                Assert-True ($info.DisplayName.Contains("#")) "色表示名にHexがありません。"
             }
+        }.GetNewClosure()
+    }
+
+    for ($i = 0; $i -le 10; $i++) {
+        Add-Test "更新日時相対表示 $i" {
+            $date = (Get-Date).Date.AddDays(-1 * $i).AddHours(12)
+            $text = Format-LastWriteTimeWithAge -LastWriteTime $date
+            Assert-True ($text.Contains("（${i}日前）")) "相対日付が含まれていません。"
         }.GetNewClosure()
     }
 
@@ -299,6 +309,30 @@ try {
             Set-Content -LiteralPath $iconPath -Value "not-an-image" -Encoding UTF8
             Assert-Equal $iconPath (Get-ProfileIconPath -ProfilePath $profilePath) "アイコンパス"
         }.GetNewClosure()
+    }
+
+    Add-Test "アイコン48px表示" {
+        $root = New-TestUserData -ProfileCount 1 -RootName "icon_size"
+        $profilePath = Join-Path $root "Default"
+        $iconPath = Join-Path $profilePath "Google Profile Picture.png"
+        $bitmap = New-Object System.Drawing.Bitmap(12, 12)
+        $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+        try {
+            $graphics.Clear([System.Drawing.Color]::Red)
+            $bitmap.Save($iconPath, [System.Drawing.Imaging.ImageFormat]::Png)
+        } finally {
+            $graphics.Dispose()
+            $bitmap.Dispose()
+        }
+        $image = Get-ProfileIconImage -ProfilePath $profilePath
+        try {
+            Assert-Equal 48 $image.Width "アイコン幅"
+            Assert-Equal 48 $image.Height "アイコン高さ"
+        } finally {
+            if ($image) {
+                $image.Dispose()
+            }
+        }
     }
 
     for ($i = 1; $i -le 20; $i++) {

@@ -87,17 +87,17 @@ function Write-Utf8JsonFile {
 
 function Get-ProfileColorPalette {
     return @(
-        [pscustomobject]@{ Id = ""; Name = "未設定"; Hex = "" },
-        [pscustomobject]@{ Id = "red"; Name = "赤"; Hex = "#FADBD8" },
-        [pscustomobject]@{ Id = "orange"; Name = "橙"; Hex = "#FDEBD0" },
-        [pscustomobject]@{ Id = "yellow"; Name = "黄"; Hex = "#FCF3CF" },
-        [pscustomobject]@{ Id = "green"; Name = "緑"; Hex = "#D5F5E3" },
-        [pscustomobject]@{ Id = "cyan"; Name = "水"; Hex = "#D6EAF8" },
-        [pscustomobject]@{ Id = "blue"; Name = "青"; Hex = "#D6DBF5" },
-        [pscustomobject]@{ Id = "purple"; Name = "紫"; Hex = "#E8DAEF" },
-        [pscustomobject]@{ Id = "pink"; Name = "桃"; Hex = "#FADBD8" },
-        [pscustomobject]@{ Id = "gray"; Name = "灰"; Hex = "#EAECEE" },
-        [pscustomobject]@{ Id = "brown"; Name = "茶"; Hex = "#EAD7C0" }
+        [pscustomobject]@{ Id = ""; Name = "未設定"; DisplayName = "未設定"; Hex = "" },
+        [pscustomobject]@{ Id = "red"; Name = "赤"; DisplayName = "赤 #FADBD8"; Hex = "#FADBD8" },
+        [pscustomobject]@{ Id = "orange"; Name = "橙"; DisplayName = "橙 #FDEBD0"; Hex = "#FDEBD0" },
+        [pscustomobject]@{ Id = "yellow"; Name = "黄"; DisplayName = "黄 #FCF3CF"; Hex = "#FCF3CF" },
+        [pscustomobject]@{ Id = "green"; Name = "緑"; DisplayName = "緑 #D5F5E3"; Hex = "#D5F5E3" },
+        [pscustomobject]@{ Id = "cyan"; Name = "水"; DisplayName = "水 #D6EAF8"; Hex = "#D6EAF8" },
+        [pscustomobject]@{ Id = "blue"; Name = "青"; DisplayName = "青 #D6DBF5"; Hex = "#D6DBF5" },
+        [pscustomobject]@{ Id = "purple"; Name = "紫"; DisplayName = "紫 #E8DAEF"; Hex = "#E8DAEF" },
+        [pscustomobject]@{ Id = "pink"; Name = "桃"; DisplayName = "桃 #FADBD8"; Hex = "#FADBD8" },
+        [pscustomobject]@{ Id = "gray"; Name = "灰"; DisplayName = "灰 #EAECEE"; Hex = "#EAECEE" },
+        [pscustomobject]@{ Id = "brown"; Name = "茶"; DisplayName = "茶 #EAD7C0"; Hex = "#EAD7C0" }
     )
 }
 
@@ -173,6 +173,16 @@ function Read-ProfileMetadata {
         Write-UiLog "プロファイルメタ情報を読み込めませんでした。退避して新規作成します: $brokenPath - $($_.Exception.Message)" "WARN"
         return New-ProfileMetadataDocument
     }
+}
+
+function Format-LastWriteTimeWithAge {
+    param([DateTime]$LastWriteTime)
+
+    $days = [int][Math]::Floor(((Get-Date).Date - $LastWriteTime.Date).TotalDays)
+    if ($days -lt 0) {
+        $days = 0
+    }
+    return "{0}（{1}日前）" -f $LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss"), $days
 }
 
 function Save-ProfileMetadataMap {
@@ -354,14 +364,15 @@ function Get-ProfileIconImage {
 
         try {
             Write-UiLog "アイコン画像読み込み開始: $path" "DEBUG"
+            $iconSize = 48
             $bytes = [System.IO.File]::ReadAllBytes($path)
             $memory = New-Object System.IO.MemoryStream(,$bytes)
             $image = [System.Drawing.Image]::FromStream($memory)
-            $bitmap = New-Object System.Drawing.Bitmap(24, 24)
+            $bitmap = New-Object System.Drawing.Bitmap($iconSize, $iconSize)
             $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
             try {
                 $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-                $graphics.DrawImage($image, 0, 0, 24, 24)
+                $graphics.DrawImage($image, 0, 0, $iconSize, $iconSize)
             } finally {
                 $graphics.Dispose()
                 $image.Dispose()
@@ -516,7 +527,7 @@ function New-ProfileIndexHtmlText {
         [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.Memo1))</td>")
         [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.Memo2))</td>")
         [void]$rows.AppendLine("<td class='number'>$($profile.SizeMB)</td>")
-        [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded ($profile.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss"))))</td>")
+        [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded (Format-LastWriteTimeWithAge -LastWriteTime $profile.LastWriteTime)))</td>")
         [void]$rows.AppendLine("<td><code>$((ConvertTo-HtmlEncoded $profile.Path))</code></td>")
         [void]$rows.AppendLine("</tr>")
     }
@@ -774,7 +785,7 @@ function Set-ProfilesGridRows {
             $profile.Memo1,
             $profile.Memo2,
             $profile.SizeMB,
-            $profile.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss"),
+            (Format-LastWriteTimeWithAge -LastWriteTime $profile.LastWriteTime),
             $profile.Path
         )
         $script:ProfilesGrid.Rows[$rowIndex].Tag = $profile
@@ -792,8 +803,11 @@ function Apply-ProfileRowStyle {
     $colorInfo = Get-ProfileColorInfo -ColorId $Row.Tag.ColorId
     if ([string]::IsNullOrWhiteSpace($colorInfo.Hex)) {
         $Row.DefaultCellStyle.BackColor = [System.Drawing.Color]::White
+        $Row.Cells["ColorId"].Style.BackColor = [System.Drawing.Color]::White
     } else {
-        $Row.DefaultCellStyle.BackColor = [System.Drawing.ColorTranslator]::FromHtml($colorInfo.Hex)
+        $color = [System.Drawing.ColorTranslator]::FromHtml($colorInfo.Hex)
+        $Row.DefaultCellStyle.BackColor = $color
+        $Row.Cells["ColorId"].Style.BackColor = $color
     }
 }
 
@@ -818,6 +832,19 @@ function Save-ProfileMetadataFromRow {
     Apply-ProfileRowStyle -Row $Row
 
     Set-ProfileMetadataEntry -UserDataPath $script:UserDataTextBox.Text.Trim() -DirectoryName $profile.DirectoryName -ColorId $profile.ColorId -Memo1 $memo1 -Memo2 $memo2
+}
+
+function Set-SelectedProfileColor {
+    param([AllowNull()][string]$ColorId)
+
+    if ($null -eq $script:ProfilesGrid.CurrentRow -or $null -eq $script:ProfilesGrid.CurrentRow.Tag) {
+        [System.Windows.Forms.MessageBox]::Show("色を設定するプロファイル行を選択してください。", $script:AppName) | Out-Null
+        return
+    }
+
+    $row = $script:ProfilesGrid.CurrentRow
+    $row.Cells["ColorId"].Value = [string]$ColorId
+    Save-ProfileMetadataFromRow -Row $row
 }
 
 function Refresh-Profiles {
@@ -1167,7 +1194,7 @@ $rootPanel.ColumnCount = 1
 $rootPanel.RowCount = 3
 $rootPanel.Padding = New-Object System.Windows.Forms.Padding(10)
 $rootPanel.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 92)))
-$rootPanel.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 42)))
+$rootPanel.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 74)))
 $rootPanel.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
 $script:Form.Controls.Add($rootPanel)
 
@@ -1245,7 +1272,7 @@ $pathPanel.Controls.Add($openBackupButton, 3, 1)
 $actionPanel = New-Object System.Windows.Forms.FlowLayoutPanel
 $actionPanel.Dock = "Fill"
 $actionPanel.FlowDirection = "LeftToRight"
-$actionPanel.WrapContents = $false
+$actionPanel.WrapContents = $true
 $rootPanel.Controls.Add($actionPanel, 0, 1)
 
 $script:MainSplit = New-Object System.Windows.Forms.SplitContainer
@@ -1333,6 +1360,30 @@ $openSelectedProfileButton.Add_Click({
 })
 $actionPanel.Controls.Add($openSelectedProfileButton)
 
+$colorLabel = New-Object System.Windows.Forms.Label
+$colorLabel.Text = "選択行の色:"
+$colorLabel.AutoSize = $true
+$colorLabel.Margin = New-Object System.Windows.Forms.Padding(12, 10, 4, 0)
+$actionPanel.Controls.Add($colorLabel)
+
+foreach ($colorInfo in (Get-ProfileColorPalette)) {
+    $colorButton = New-Object System.Windows.Forms.Button
+    $colorButton.Width = if ([string]::IsNullOrWhiteSpace($colorInfo.Id)) { 48 } else { 30 }
+    $colorButton.Height = 24
+    $colorButton.Text = if ([string]::IsNullOrWhiteSpace($colorInfo.Id)) { "なし" } else { $colorInfo.Name }
+    $colorButton.Tag = $colorInfo.Id
+    $colorButton.Margin = New-Object System.Windows.Forms.Padding(2, 7, 2, 0)
+    if (-not [string]::IsNullOrWhiteSpace($colorInfo.Hex)) {
+        $colorButton.BackColor = [System.Drawing.ColorTranslator]::FromHtml($colorInfo.Hex)
+        $colorButton.FlatStyle = "Flat"
+    }
+    $colorButton.Add_Click({
+        param($Sender, $EventArgs)
+        Set-SelectedProfileColor -ColorId ([string]$Sender.Tag)
+    })
+    $actionPanel.Controls.Add($colorButton)
+}
+
 $script:ProfilesGrid = New-Object System.Windows.Forms.DataGridView
 $script:ProfilesGrid.Dock = "Fill"
 $script:ProfilesGrid.AllowUserToAddRows = $false
@@ -1342,6 +1393,7 @@ $script:ProfilesGrid.SelectionMode = "FullRowSelect"
 $script:ProfilesGrid.MultiSelect = $false
 $script:ProfilesGrid.AutoSizeColumnsMode = "Fill"
 $script:ProfilesGrid.EditMode = "EditOnEnter"
+$script:ProfilesGrid.RowTemplate.Height = 54
 
 $selectColumn = New-Object System.Windows.Forms.DataGridViewCheckBoxColumn
 $selectColumn.Name = "SelectColumn"
@@ -1353,7 +1405,7 @@ $iconColumn = New-Object System.Windows.Forms.DataGridViewImageColumn
 $iconColumn.Name = "IconImage"
 $iconColumn.HeaderText = "アイコン"
 $iconColumn.ImageLayout = "Zoom"
-$iconColumn.FillWeight = 9
+$iconColumn.FillWeight = 14
 [void]$script:ProfilesGrid.Columns.Add($iconColumn)
 [void]$script:ProfilesGrid.Columns.Add("DirectoryName", "ディレクトリ")
 [void]$script:ProfilesGrid.Columns.Add("DisplayName", "表示名")
@@ -1365,7 +1417,7 @@ $colorColumn = New-Object System.Windows.Forms.DataGridViewComboBoxColumn
 $colorColumn.Name = "ColorId"
 $colorColumn.HeaderText = "色"
 $colorColumn.ValueMember = "Id"
-$colorColumn.DisplayMember = "Name"
+$colorColumn.DisplayMember = "DisplayName"
 $colorColumn.DataSource = [System.Collections.ArrayList](Get-ProfileColorPalette)
 $colorColumn.DisplayStyle = "DropDownButton"
 $colorColumn.FlatStyle = "Flat"
