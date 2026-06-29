@@ -15,6 +15,7 @@ Chrome のプロファイル整理を安全寄りに進めるための Windows G
 - `docs/01_conversation_history.md` / `docs/01_conversation_history.html`: 会話履歴
 - `docs/02_user_guide.md` / `docs/02_user_guide.html`: ユーザーガイド
 - `docs/03_development_notes.md` / `docs/03_development_notes.html`: 開発メモ
+- `docs/04_quality_report.md` / `docs/04_quality_report.html`: 品質向上レポート
 - `docs/README.md` / `docs/README.html`: docs 目次
 
 ## 主な機能
@@ -30,6 +31,17 @@ Chrome のプロファイル整理を安全寄りに進めるための Windows G
 - User Data フォルダ、バックアップフォルダ、個別プロファイルフォルダを Explorer で開く
 - 選択したプロファイルを完全削除せず、`_ChromeProfilesManager_Quarantine` に移動
 - 起動直後のプロファイル読み込みをバックグラウンド化
+- 画面ログに加えて、バックアップ先の `logs` フォルダへ詳細ログを保存
+
+## テスト
+
+自己完結のテストランナーは `tests/Run-Tests.ps1` です。
+
+実行例:
+
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1`
+
+現在のテストケース数は 175 件です。
 
 ## 推奨作業手順
 

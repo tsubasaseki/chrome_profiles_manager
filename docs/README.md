@@ -23,7 +23,14 @@ ChromeProfilesManager の詳細ドキュメントです。
 
 実装方式、文字コード、プロファイル検出、非同期読み込み、バックアップ、検証手順、Git 状態を説明しています。
 
-## 4. HTML について
+## 4. 品質向上レポート
+
+- Markdown: `04_quality_report.md`
+- HTML: `04_quality_report.html`
+
+追加したログ、テスト、レビューで修正した潜在不具合、残る注意点を説明しています。
+
+## 5. HTML について
 
 各 HTML は対応する Markdown から生成した SingleFileHTML です。
 
