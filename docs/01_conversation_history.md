@@ -242,3 +242,301 @@ Codex は、原因を `BackgroundWorker` の別スレッド上で PowerShell ス
 ただし、`remote origin` は未設定です。
 
 そのため、GitHub pull と GitHub push は実行できません。remote origin の URL が提供されれば、後続で remote 設定、pull、push を実行できます。
+
+## 16. 品質向上依頼
+
+ユーザーは、品質向上として次の作業を依頼しました。
+
+- バグ発生時にデバッグしやすい詳細ログ出力を追加する。
+- テストケースを100件以上追加してパスさせる。
+- 必要に応じてテスト環境を構築する。
+- 潜在的な不具合や問題点がないかレビューする。
+- 不具合は修正し、該当箇所のテストとログを追加する。
+- 問題点はユーザーに提示して解決策を挙げる。
+- docs を現状実装と矛盾しないように更新する。
+- Markdown と対応する SingleFileHTML を追加・更新する。
+- remote origin に変更があれば pull する。
+- 作業内容ごとに細分化して Git commit する。
+- 最終的にワーキングツリーを clean にする。
+- GitHub へ push する。
+
+## 17. 品質向上で追加したログ
+
+Codex は、画面ログだけでなく、バックアップ先フォルダ配下の `logs` フォルダへ日付別ログファイルを保存するようにしました。
+
+ログファイル名は次の形式です。
+
+- `ChromeProfilesManager_yyyyMMdd.log`
+
+追加した主なログは次の通りです。
+
+- アプリ起動情報
+- 対象 User Data フォルダ
+- バックアップ先フォルダ
+- プロファイル検出開始・完了
+- `Local State` と `Preferences` の読み込み状況
+- サイズ計算開始・完了
+- ZIP追加開始・完了
+- 読み取り不可ファイルのスキップ
+- バックアップ作成開始・完了
+- 隔離先フォルダ作成
+- 未処理エラー
+
+ログレベルとして `INFO`、`DEBUG`、`WARN`、`ERROR` を使うようにしました。
+
+## 18. 品質向上で見つけて修正した不具合
+
+テストとレビューにより、次の潜在不具合を発見して修正しました。
+
+- PowerShell 関数の出力列挙により、プロファイルが1件だけのとき配列ではなく単体オブジェクトとして扱われる問題
+- Runspace の `EndInvoke()` 結果が配列1個として返り、UI一覧へ正しく展開されない可能性
+- 同じ秒に隔離処理を複数回実行した場合に、隔離先フォルダ名が衝突する可能性
+- バックグラウンド処理中の詳細ログ不足
+
+隔離先フォルダの衝突については、`yyyyMMdd_HHmmss_01` のように連番を付けて回避するようにしました。
+
+## 19. テストスイート追加
+
+Codex は、PowerShell だけで実行できる自己完結のテストランナーを追加しました。
+
+- `tests/Run-Tests.ps1`
+
+初回の品質向上時点では、175件のテストを追加し、すべて成功させました。
+
+テスト対象は次の通りです。
+
+- HTMLエンコード
+- ログ出力
+- `Local State` 解析
+- `Preferences` 解析
+- アイコンパス検出
+- プロファイル検出
+- `Local State` がない場合の検出
+- `Preferences` がない場合の検出
+- HTMLレポート生成
+- ZIPバックアップ生成
+- ディレクトリサイズ計算
+- Runspace非同期互換
+- HTML保存
+- 存在しない User Data の扱い
+
+## 20. 品質向上docs更新とローカルコミット
+
+品質向上に合わせて、次のドキュメントを更新・追加しました。
+
+- `README.md`
+- `docs/02_user_guide.md`
+- `docs/03_development_notes.md`
+- `docs/04_quality_report.md`
+- 対応する SingleFileHTML
+
+この時点で作成した主なコミットは次の通りです。
+
+- `6145617 Improve logging and fix profile result handling`
+- `64c9e77 Add PowerShell regression test suite`
+- `4ad249a Document quality improvements and test coverage`
+
+## 21. GitHub リポジトリ作成依頼
+
+ユーザーは、プロジェクトが Git リポジトリでなければ init し、remote repo が存在しなければ作成し、docs更新、コミット、push を行うよう依頼しました。
+
+Codex は、PAT ファイル `T:\.secrets\github_pat.txt` を使って GitHub 認証ユーザーを確認しました。
+
+確認した GitHub ユーザーは次の通りです。
+
+- `tsubasaseki`
+
+GitHub 上に次のリポジトリを作成しました。
+
+- `https://github.com/tsubasaseki/chrome_profiles_manager`
+
+ローカルの `remote origin` は次の URL に設定しました。
+
+- `https://github.com/tsubasaseki/chrome_profiles_manager.git`
+
+GitHub remote 情報を docs に反映し、次のコミットを作成しました。
+
+- `856924a Document GitHub remote setup`
+
+その後、`master` ブランチを GitHub へ push しました。
+
+## 22. 日本語文字化けと画面ログ過多のスクリーンショット
+
+ユーザーは、ChromeProfilesManager の画面スクリーンショットを提示しました。
+
+スクリーンショットから、次の問題を確認しました。
+
+- 日本語のプロファイル名が文字化けしている。
+- 画面下部のログ欄が `DEBUG` ログで埋まっている。
+
+Codex は、文字化けの原因を PowerShell 5.1 の `Get-Content` 既定エンコーディングに依存して Chrome の JSON を読んでいたことだと判断しました。
+
+また、画面ログ過多の原因は、詳細ログ追加によりアイコン画像読み込みなどの `DEBUG` ログがUIにも表示されていたことだと判断しました。
+
+## 23. 日本語JSON読み込み修正
+
+Codex は、Chrome の `Local State` と `Preferences` を UTF-8 固定で読み込むため、`Read-Utf8JsonFile` を追加しました。
+
+これにより、日本語の ProfileName、Google名、表示名が文字化けしにくくなりました。
+
+また、画面ログには `DEBUG` を表示せず、ファイルログにのみ保存するようにしました。
+
+この修正に合わせて、次のテストを追加しました。
+
+- 日本語JSON解析
+- 画面DEBUG抑制
+
+テスト件数は190件になり、すべて成功しました。
+
+この作業は次のコミットとして GitHub へ push しました。
+
+- `7809ee7 Fix Japanese profile decoding and reduce UI log noise`
+
+## 24. プランモード依頼
+
+ユーザーは、次の作業についてプランモードを依頼しました。
+
+ユーザーは、今後の作業について、Codex が先に計画だけを提示し、ユーザーが `ok` と了承した場合にのみ、フェーズ分けして100%完了まで作業するよう求めました。
+
+Codex は、作業内容が未指定だったため、具体的な作業内容を求める返答をしました。
+
+その後、ユーザーは次の具体要望を提示しました。
+
+- このシステム専用の色分けを用意する。
+- 10色のカラーピッカーを用意する。
+- メモ1、メモ2を用意する。
+- この情報は ChromeProfiles フォルダに JSON などで保存する。
+- この情報は ZIP にも入れる。
+- Window 内の `バックアップZIP` と `ログ出力エリア` のサイズを変更できるようにする。
+
+Codex は、ユーザーから `ok` をもらうまで実装しない前提で、次の実装プランを提示しました。
+
+- Chrome 本体の設定ファイルは直接変更しない。
+- Chrome User Data 配下に `_ChromeProfilesManager\profile_metadata.json` を保存する。
+- 一覧に色、メモ1、メモ2を追加する。
+- 10色パレットを追加する。
+- メタ情報をHTMLレポートとZIPへ含める。
+- プロファイル一覧、バックアップZIP、ログ出力エリアを SplitContainer でリサイズ可能にする。
+- テストとdocsを更新する。
+- GitHubへpushする。
+
+推奨 reasoning level は `High` と提示しました。
+
+## 25. 色分けとメモ機能の実装
+
+ユーザーが `ok` と返信したため、Codex は実装を開始しました。
+
+追加した主な機能は次の通りです。
+
+- プロファイルごとの `色`
+- `メモ1`
+- `メモ2`
+- 10色パレット
+- 一覧上での色・メモ編集
+- 行背景色への色反映
+- メタ情報JSONの保存・読込
+- HTMLレポートへの色・メモ追加
+- ZIPバックアップへのメタ情報JSON同梱
+
+メタ情報の保存先は次の通りです。
+
+- `<Chrome User Data>\_ChromeProfilesManager\profile_metadata.json`
+
+ZIP内の同梱先は次の通りです。
+
+- `ChromeProfilesManager/profile_metadata.json`
+
+色パレットは次の10色です。
+
+- 赤
+- 橙
+- 黄
+- 緑
+- 水
+- 青
+- 紫
+- 桃
+- 灰
+- 茶
+
+## 26. リサイズ可能レイアウトの実装
+
+ユーザーの要望に合わせて、固定的な TableLayoutPanel 構成から、SplitContainer を使う構成へ変更しました。
+
+リサイズ可能にした領域は次の通りです。
+
+- プロファイル一覧
+- バックアップZIP
+- ログ出力エリア
+
+ユーザーは境界線をドラッグして、バックアップZIP欄やログ出力欄の高さを調整できます。
+
+## 27. 色分け・メモ機能のテスト
+
+色分け・メモ機能に合わせて、テストを追加しました。
+
+追加した主なテストは次の通りです。
+
+- 色パレット
+- メタ情報保存読込
+- メタ情報プロファイル反映
+- HTMLレポートへのメモ列反映
+- ZIPバックアップへの `ChromeProfilesManager/profile_metadata.json` 同梱
+
+テスト件数は226件になり、すべて成功しました。
+
+## 28. 色分け・メモ機能のdocs更新とpush
+
+Codex は、色分け・メモ機能とリサイズ可能レイアウトに合わせて、次のドキュメントを更新しました。
+
+- `README.md`
+- `docs/02_user_guide.md`
+- `docs/03_development_notes.md`
+- `docs/04_quality_report.md`
+- 対応する SingleFileHTML
+
+作成したコミットは次の通りです。
+
+- `81de59a Add profile metadata colors and memos`
+- `e99641c Document profile metadata and resizable layout`
+
+これらのコミットは GitHub へ push 済みです。
+
+## 29. 現在の主要ファイル構成
+
+現在の主要ファイルは次の通りです。
+
+- `ChromeProfilesManager.ps1`: アプリ本体
+- `Start-ChromeProfilesManager.vbs`: 黒い console を出さない起動ランチャー
+- `README.md`: ルートの簡易説明
+- `tests/Run-Tests.ps1`: 自己完結のPowerShellテストランナー
+- `docs/01_conversation_history.md`: 会話履歴
+- `docs/02_user_guide.md`: ユーザー向け操作ガイド
+- `docs/03_development_notes.md`: 実装・保守メモ
+- `docs/04_quality_report.md`: 品質向上レポート
+- `docs/README.md`: docs目次
+- `docs/*.html`: 各Markdownに対応するSingleFileHTML
+
+## 30. 現在の検証状態
+
+現在の検証状態は次の通りです。
+
+- PowerShell構文チェック: OK
+- docs Markdown/HTML対応検証: OK
+- テスト: 226件成功、0件失敗
+- GitHub remote: `origin/master` と同期済み
+- 最新 push 済みコミット: `e99641c Document profile metadata and resizable layout`
+
+## 31. 今回の完了作業依頼
+
+ユーザーは、ここまでの会話履歴を漏れなく docs に書き出し、docs を現状の実装と矛盾しないように更新し、Markdown と対応する SingleFileHTML を維持するよう依頼しました。
+
+また、remote origin に変更があれば pull し、作業内容ごとに細分化して commit し、最後に GitHub へ push するよう依頼しました。
+
+Codex は、PAT `T:\.secrets\github_pat.txt` を使って `git pull --ff-only origin master` を実行しました。
+
+結果は次の通りです。
+
+- `Already up to date.`
+
+その後、この会話履歴を更新し、対応する SingleFileHTML を再生成する作業へ進みました。
