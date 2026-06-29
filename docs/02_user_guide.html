@@ -70,6 +70,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 <li><code>清掃後ZIP保存</code>: CCleaner などで清掃した後の原本バックアップ ZIP を作成する</li>
 <li><code>選択を隔離</code>: チェックしたプロファイルを隔離フォルダへ移動する</li>
 <li><code>選択を開く</code>: 一覧で選択中のプロファイルフォルダを Explorer で開く</li>
+<li><code>選択行の色</code>: 選択中のプロファイルへ、10色ボタンから色を直接設定する</li>
 </ul>
 <p>ZIP 欄には次の操作があります。</p>
 <ul>
@@ -105,7 +106,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 <h2>6. プロファイル一覧に表示される情報</h2>
 <p>プロファイル一覧には次の列があります。</p>
 <ul>
-<li><code>アイコン</code>: ローカルに保存されているプロフィール画像</li>
+<li><code>アイコン</code>: ローカルに保存されているプロフィール画像。48px相当の大きさで表示します。</li>
 <li><code>ディレクトリ</code>: <code>Default</code>、<code>Profile 1</code> などのフォルダ名</li>
 <li><code>表示名</code>: <code>Local State</code> から取得した Chrome の表示名</li>
 <li><code>ProfileName</code>: 各プロファイルの <code>Preferences</code> から取得した profile name</li>
@@ -116,7 +117,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 <li><code>メモ1</code>: このアプリ専用のメモ</li>
 <li><code>メモ2</code>: このアプリ専用のメモ</li>
 <li><code>サイズMB</code>: プロファイルフォルダの概算サイズ</li>
-<li><code>更新日時</code>: プロファイルフォルダの最終更新日時</li>
+<li><code>更新日時</code>: プロファイルフォルダの最終更新日時。日時の後に <code>（n日前）</code> を表示します。</li>
 <li><code>場所</code>: プロファイルフォルダのフルパス</li>
 </ul>
 <p>Chrome 内蔵アバター画像そのものは Chrome の内部リソースであり、直接画像として表示できない場合があります。その場合も、<code>アイコン情報</code> には識別子を表示します。</p>
@@ -141,6 +142,8 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 <li>茶</li>
 </ul>
 <p><code>色</code>、<code>メモ1</code>、<code>メモ2</code> は一覧上で編集できます。</p>
+<p>色は一覧のドロップダウンから選べます。</p>
+<p>さらに、画面上部の <code>選択行の色</code> にある色ボタンを押すと、選択中のプロファイルへすぐ反映できます。</p>
 <p>編集すると、<code>profile_metadata.json</code> に保存されます。</p>
 <p>未設定に戻し、メモ1とメモ2も空にすると、そのプロファイルのメタ情報はJSONから削除されます。</p>
 <h2>8. 推奨作業手順</h2>
@@ -247,6 +250,7 @@ Chrome の User Data フォルダの既定値は次の通りです。
 - `清掃後ZIP保存`: CCleaner などで清掃した後の原本バックアップ ZIP を作成する
 - `選択を隔離`: チェックしたプロファイルを隔離フォルダへ移動する
 - `選択を開く`: 一覧で選択中のプロファイルフォルダを Explorer で開く
+- `選択行の色`: 選択中のプロファイルへ、10色ボタンから色を直接設定する
 
 ZIP 欄には次の操作があります。
 
@@ -291,7 +295,7 @@ ZIP 欄には次の操作があります。
 
 プロファイル一覧には次の列があります。
 
-- `アイコン`: ローカルに保存されているプロフィール画像
+- `アイコン`: ローカルに保存されているプロフィール画像。48px相当の大きさで表示します。
 - `ディレクトリ`: `Default`、`Profile 1` などのフォルダ名
 - `表示名`: `Local State` から取得した Chrome の表示名
 - `ProfileName`: 各プロファイルの `Preferences` から取得した profile name
@@ -302,7 +306,7 @@ ZIP 欄には次の操作があります。
 - `メモ1`: このアプリ専用のメモ
 - `メモ2`: このアプリ専用のメモ
 - `サイズMB`: プロファイルフォルダの概算サイズ
-- `更新日時`: プロファイルフォルダの最終更新日時
+- `更新日時`: プロファイルフォルダの最終更新日時。日時の後に `（n日前）` を表示します。
 - `場所`: プロファイルフォルダのフルパス
 
 Chrome 内蔵アバター画像そのものは Chrome の内部リソースであり、直接画像として表示できない場合があります。その場合も、`アイコン情報` には識別子を表示します。
@@ -331,6 +335,10 @@ Chrome の `Local State` と `Preferences` は UTF-8 として読み込みます
 - 茶
 
 `色`、`メモ1`、`メモ2` は一覧上で編集できます。
+
+色は一覧のドロップダウンから選べます。
+
+さらに、画面上部の `選択行の色` にある色ボタンを押すと、選択中のプロファイルへすぐ反映できます。
 
 編集すると、`profile_metadata.json` に保存されます。
 
