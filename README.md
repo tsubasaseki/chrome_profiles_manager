@@ -38,6 +38,10 @@ GitHub repository:
 - 画面ログに加えて、バックアップ先の `logs` フォルダへ詳細ログを保存
 - Chrome の `Local State` と `Preferences` を UTF-8 固定で読み込み、日本語プロファイル名の文字化けを防止
 - 画面ログでは DEBUG を非表示にし、詳細 DEBUG はファイルログに保存
+- アプリ専用の10色分類、メモ1、メモ2をプロファイルごとに保存
+- 色とメモは Chrome User Data 配下の `_ChromeProfilesManager\profile_metadata.json` に保存
+- メタ情報JSONをバックアップZIPへ同梱
+- プロファイル一覧、バックアップZIP、ログ出力エリアの高さをドラッグで調整
 
 ## テスト
 
@@ -47,7 +51,7 @@ GitHub repository:
 
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1`
 
-現在のテストケース数は 190 件です。
+現在のテストケース数は 226 件です。
 
 ## 推奨作業手順
 
