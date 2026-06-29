@@ -221,13 +221,16 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 <h2>15. Git 状態</h2>
 <p>最初の確認時点で、<code>W:\CodexAppTools\chrome_profiles_manager</code> は Git リポジトリではありませんでした。</p>
 <p>現在は、ローカルコミットと clean なワーキングツリーを可能にするため、ローカル Git リポジトリとして初期化済みです。</p>
-<p>ただし、<code>remote origin</code> は未設定です。</p>
-<p>そのため、現時点では次の操作は実行できません。</p>
+<p>GitHub リポジトリは次の場所に作成済みです。</p>
 <ul>
-<li><code>remote origin</code> からの pull</li>
-<li>GitHub push</li>
+<li><code>https://github.com/tsubasaseki/chrome_profiles_manager</code></li>
 </ul>
-<p>GitHub 連携を行うには、remote origin を設定する必要があります。</p>
+<p><code>remote origin</code> は次の URL に設定済みです。</p>
+<ul>
+<li><code>https://github.com/tsubasaseki/chrome_profiles_manager.git</code></li>
+</ul>
+<p>リポジトリ作成直後の確認では、remote 側に既存履歴はありませんでした。</p>
+<p>GitHub への push には、<code>T:\.secrets\github_pat.txt</code> の PAT を使用します。PAT の値はドキュメントや Git remote には保存しません。</p>
 
 <details>
 <summary>対応するMarkdown原文</summary>
@@ -472,14 +475,17 @@ HTML に含める主な情報は次の通りです。
 
 現在は、ローカルコミットと clean なワーキングツリーを可能にするため、ローカル Git リポジトリとして初期化済みです。
 
-ただし、`remote origin` は未設定です。
+GitHub リポジトリは次の場所に作成済みです。
 
-そのため、現時点では次の操作は実行できません。
+- `https://github.com/tsubasaseki/chrome_profiles_manager`
 
-- `remote origin` からの pull
-- GitHub push
+`remote origin` は次の URL に設定済みです。
 
-GitHub 連携を行うには、remote origin を設定する必要があります。
+- `https://github.com/tsubasaseki/chrome_profiles_manager.git`
+
+リポジトリ作成直後の確認では、remote 側に既存履歴はありませんでした。
+
+GitHub への push には、`T:\.secrets\github_pat.txt` の PAT を使用します。PAT の値はドキュメントや Git remote には保存しません。
 </pre>
 </details>
 </main>

@@ -239,11 +239,14 @@ HTML に含める主な情報は次の通りです。
 
 現在は、ローカルコミットと clean なワーキングツリーを可能にするため、ローカル Git リポジトリとして初期化済みです。
 
-ただし、`remote origin` は未設定です。
+GitHub リポジトリは次の場所に作成済みです。
 
-そのため、現時点では次の操作は実行できません。
+- `https://github.com/tsubasaseki/chrome_profiles_manager`
 
-- `remote origin` からの pull
-- GitHub push
+`remote origin` は次の URL に設定済みです。
 
-GitHub 連携を行うには、remote origin を設定する必要があります。
+- `https://github.com/tsubasaseki/chrome_profiles_manager.git`
+
+リポジトリ作成直後の確認では、remote 側に既存履歴はありませんでした。
+
+GitHub への push には、`T:\.secrets\github_pat.txt` の PAT を使用します。PAT の値はドキュメントや Git remote には保存しません。

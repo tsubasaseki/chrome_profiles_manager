@@ -2,6 +2,10 @@
 
 Chrome のプロファイル整理を安全寄りに進めるための Windows GUI アプリです。PowerShell + WinForms で動くため、`.NET SDK` のビルドは不要です。
 
+GitHub repository:
+
+`https://github.com/tsubasaseki/chrome_profiles_manager`
+
 ## 起動
 
 `Start-ChromeProfilesManager.vbs` をダブルクリックします。

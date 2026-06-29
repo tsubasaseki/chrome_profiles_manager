@@ -2,6 +2,10 @@
 
 ChromeProfilesManager の詳細ドキュメントです。
 
+GitHub repository:
+
+- `https://github.com/tsubasaseki/chrome_profiles_manager`
+
 ## 1. 会話履歴
 
 - Markdown: `01_conversation_history.md`

@@ -147,3 +147,14 @@ ZIP バックアップ作成中は画面操作を無効化します。
 - Markdown と SingleFileHTML の対応確認
 
 すべて成功しています。
+
+## 8. GitHub 連携
+
+GitHub リポジトリを作成し、`remote origin` を設定しました。
+
+- GitHub: `https://github.com/tsubasaseki/chrome_profiles_manager`
+- origin: `https://github.com/tsubasaseki/chrome_profiles_manager.git`
+
+リポジトリ作成直後の確認では、remote 側に既存履歴はありませんでした。
+
+push には `T:\.secrets\github_pat.txt` の PAT を使用します。
