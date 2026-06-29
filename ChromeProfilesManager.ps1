@@ -71,6 +71,164 @@ function Read-Utf8JsonFile {
     return $jsonText | ConvertFrom-Json
 }
 
+function Write-Utf8JsonFile {
+    param(
+        [string]$Path,
+        [object]$Value
+    )
+
+    $jsonText = $Value | ConvertTo-Json -Depth 20
+    $parent = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+    [System.IO.File]::WriteAllText($Path, $jsonText, [System.Text.Encoding]::UTF8)
+}
+
+function Get-ProfileColorPalette {
+    return @(
+        [pscustomobject]@{ Id = ""; Name = "未設定"; Hex = "" },
+        [pscustomobject]@{ Id = "red"; Name = "赤"; Hex = "#FADBD8" },
+        [pscustomobject]@{ Id = "orange"; Name = "橙"; Hex = "#FDEBD0" },
+        [pscustomobject]@{ Id = "yellow"; Name = "黄"; Hex = "#FCF3CF" },
+        [pscustomobject]@{ Id = "green"; Name = "緑"; Hex = "#D5F5E3" },
+        [pscustomobject]@{ Id = "cyan"; Name = "水"; Hex = "#D6EAF8" },
+        [pscustomobject]@{ Id = "blue"; Name = "青"; Hex = "#D6DBF5" },
+        [pscustomobject]@{ Id = "purple"; Name = "紫"; Hex = "#E8DAEF" },
+        [pscustomobject]@{ Id = "pink"; Name = "桃"; Hex = "#FADBD8" },
+        [pscustomobject]@{ Id = "gray"; Name = "灰"; Hex = "#EAECEE" },
+        [pscustomobject]@{ Id = "brown"; Name = "茶"; Hex = "#EAD7C0" }
+    )
+}
+
+function Get-ProfileColorInfo {
+    param([AllowNull()][string]$ColorId)
+
+    $palette = Get-ProfileColorPalette
+    $match = $palette | Where-Object { $_.Id -eq $ColorId } | Select-Object -First 1
+    if ($null -eq $match) {
+        return $palette[0]
+    }
+    return $match
+}
+
+function Get-ManagerDataPath {
+    param([string]$UserDataPath)
+    return Join-Path $UserDataPath "_ChromeProfilesManager"
+}
+
+function Get-ProfileMetadataPath {
+    param([string]$UserDataPath)
+    return Join-Path (Get-ManagerDataPath -UserDataPath $UserDataPath) "profile_metadata.json"
+}
+
+function New-ProfileMetadataDocument {
+    return [pscustomobject]@{
+        version = 1
+        updated_at = (Get-Date).ToString("o")
+        profiles = [pscustomobject]@{}
+    }
+}
+
+function ConvertTo-ProfileMetadataMap {
+    param([AllowNull()][object]$Metadata)
+
+    $map = @{}
+    if ($null -eq $Metadata -or $null -eq $Metadata.profiles) {
+        return $map
+    }
+
+    foreach ($property in $Metadata.profiles.PSObject.Properties) {
+        $map[$property.Name] = [pscustomobject]@{
+            color_id = [string]$property.Value.color_id
+            memo1 = [string]$property.Value.memo1
+            memo2 = [string]$property.Value.memo2
+            updated_at = [string]$property.Value.updated_at
+        }
+    }
+    return $map
+}
+
+function Read-ProfileMetadata {
+    param([string]$UserDataPath)
+
+    $path = Get-ProfileMetadataPath -UserDataPath $UserDataPath
+    if (-not (Test-Path -LiteralPath $path)) {
+        Write-UiLog "プロファイルメタ情報が未作成です: $path" "DEBUG"
+        return New-ProfileMetadataDocument
+    }
+
+    try {
+        $metadata = Read-Utf8JsonFile -Path $path
+        if ($null -eq $metadata.profiles) {
+            $metadata | Add-Member -MemberType NoteProperty -Name profiles -Value ([pscustomobject]@{}) -Force
+        }
+        return $metadata
+    } catch {
+        $brokenPath = "$path.broken.$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+        try {
+            Copy-Item -LiteralPath $path -Destination $brokenPath -Force
+        } catch {
+        }
+        Write-UiLog "プロファイルメタ情報を読み込めませんでした。退避して新規作成します: $brokenPath - $($_.Exception.Message)" "WARN"
+        return New-ProfileMetadataDocument
+    }
+}
+
+function Save-ProfileMetadataMap {
+    param(
+        [string]$UserDataPath,
+        [hashtable]$Map
+    )
+
+    $profiles = [ordered]@{}
+    foreach ($key in ($Map.Keys | Sort-Object)) {
+        $entry = $Map[$key]
+        $profiles[$key] = [ordered]@{
+            color_id = [string]$entry.color_id
+            memo1 = [string]$entry.memo1
+            memo2 = [string]$entry.memo2
+            updated_at = [string]$entry.updated_at
+        }
+    }
+
+    $document = [ordered]@{
+        version = 1
+        updated_at = (Get-Date).ToString("o")
+        profiles = $profiles
+    }
+    $path = Get-ProfileMetadataPath -UserDataPath $UserDataPath
+    Write-Utf8JsonFile -Path $path -Value $document
+    Write-UiLog "プロファイルメタ情報を保存しました: $path" "INFO"
+    return $path
+}
+
+function Set-ProfileMetadataEntry {
+    param(
+        [string]$UserDataPath,
+        [string]$DirectoryName,
+        [AllowNull()][string]$ColorId,
+        [AllowNull()][string]$Memo1,
+        [AllowNull()][string]$Memo2
+    )
+
+    $metadata = Read-ProfileMetadata -UserDataPath $UserDataPath
+    $map = ConvertTo-ProfileMetadataMap -Metadata $metadata
+    if ([string]::IsNullOrWhiteSpace($ColorId) -and [string]::IsNullOrWhiteSpace($Memo1) -and [string]::IsNullOrWhiteSpace($Memo2)) {
+        if ($map.ContainsKey($DirectoryName)) {
+            $map.Remove($DirectoryName)
+        }
+    } else {
+        $map[$DirectoryName] = [pscustomobject]@{
+            color_id = [string]$ColorId
+            memo1 = [string]$Memo1
+            memo2 = [string]$Memo2
+            updated_at = (Get-Date).ToString("o")
+        }
+    }
+    Save-ProfileMetadataMap -UserDataPath $UserDataPath -Map $map | Out-Null
+}
+
 function ConvertTo-HtmlEncoded {
     param([AllowNull()][string]$Value)
     return [System.Net.WebUtility]::HtmlEncode($Value)
@@ -253,6 +411,8 @@ function Get-ChromeProfiles {
 
     Write-UiLog "プロファイル検出開始: $UserDataPath" "INFO"
     $profileInfo = Get-LocalStateProfileInfo -UserDataPath $UserDataPath
+    $profileMetadata = Read-ProfileMetadata -UserDataPath $UserDataPath
+    $profileMetadataMap = ConvertTo-ProfileMetadataMap -Metadata $profileMetadata
     $candidateMap = @{}
 
     foreach ($key in $profileInfo.Keys) {
@@ -304,6 +464,11 @@ function Get-ChromeProfiles {
         }
 
         $sizeBytes = Get-DirectorySizeBytes -Path $path
+        $metadataEntry = $profileMetadataMap[$directoryName]
+        if ($null -eq $metadataEntry) {
+            $metadataEntry = [pscustomobject]@{ color_id = ""; memo1 = ""; memo2 = ""; updated_at = "" }
+        }
+        $colorInfo = Get-ProfileColorInfo -ColorId $metadataEntry.color_id
         $profiles.Add([pscustomobject]@{
             DirectoryName = [string]$directoryName
             DisplayName = [string]$displayName
@@ -311,6 +476,11 @@ function Get-ChromeProfiles {
             UserName = [string]$userName
             GaiaName = [string]$gaiaName
             AvatarIcon = [string]$localStateInfo.AvatarIcon
+            ColorId = [string]$colorInfo.Id
+            ColorName = [string]$colorInfo.Name
+            ColorHex = [string]$colorInfo.Hex
+            Memo1 = [string]$metadataEntry.memo1
+            Memo2 = [string]$metadataEntry.memo2
             IconPath = Get-ProfileIconPath -ProfilePath $path
             IconImage = if ($SkipIconImage) { $null } else { Get-ProfileIconImage -ProfilePath $path }
             Path = [string]$path
@@ -318,7 +488,7 @@ function Get-ChromeProfiles {
             SizeMB = [math]::Round($sizeBytes / 1MB, 2)
             LastWriteTime = $item.LastWriteTime
         })
-        Write-UiLog "プロファイル検出: Directory=$directoryName DisplayName=$displayName User=$userName Path=$path Size=$sizeBytes" "DEBUG"
+        Write-UiLog "プロファイル検出: Directory=$directoryName DisplayName=$displayName User=$userName Color=$($colorInfo.Id) Path=$path Size=$sizeBytes" "DEBUG"
     }
 
     Write-UiLog "プロファイル検出完了: $($profiles.Count) 件" "INFO"
@@ -342,6 +512,9 @@ function New-ProfileIndexHtmlText {
         [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.UserName))</td>")
         [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.GaiaName))</td>")
         [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.AvatarIcon))</td>")
+        [void]$rows.AppendLine("<td style='background:$((ConvertTo-HtmlEncoded $profile.ColorHex));'>$((ConvertTo-HtmlEncoded $profile.ColorName))</td>")
+        [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.Memo1))</td>")
+        [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.Memo2))</td>")
         [void]$rows.AppendLine("<td class='number'>$($profile.SizeMB)</td>")
         [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded ($profile.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss"))))</td>")
         [void]$rows.AppendLine("<td><code>$((ConvertTo-HtmlEncoded $profile.Path))</code></td>")
@@ -384,6 +557,9 @@ User Data: <code>$((ConvertTo-HtmlEncoded $UserDataPath))</code><br>
 <th style="width: 16%;">ログインユーザー</th>
 <th style="width: 13%;">Google名</th>
 <th style="width: 12%;">アイコン</th>
+<th style="width: 8%;">色</th>
+<th style="width: 14%;">メモ1</th>
+<th style="width: 14%;">メモ2</th>
 <th style="width: 8%;">サイズMB</th>
 <th style="width: 14%;">更新日時</th>
 <th>場所</th>
@@ -475,6 +651,15 @@ function New-ProfilesZipBackup {
         $localState = Join-Path $UserDataPath "Local State"
         if (Test-Path -LiteralPath $localState) {
             if (Add-FileToZip -Zip $zip -SourceFile $localState -EntryName "Local State") {
+                $added++
+            } else {
+                $skipped++
+            }
+        }
+
+        $metadataPath = Get-ProfileMetadataPath -UserDataPath $UserDataPath
+        if (Test-Path -LiteralPath $metadataPath) {
+            if (Add-FileToZip -Zip $zip -SourceFile $metadataPath -EntryName "ChromeProfilesManager/profile_metadata.json") {
                 $added++
             } else {
                 $skipped++
@@ -585,12 +770,54 @@ function Set-ProfilesGridRows {
             $profile.UserName,
             $profile.GaiaName,
             $profile.AvatarIcon,
+            $profile.ColorId,
+            $profile.Memo1,
+            $profile.Memo2,
             $profile.SizeMB,
             $profile.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss"),
             $profile.Path
         )
         $script:ProfilesGrid.Rows[$rowIndex].Tag = $profile
+        Apply-ProfileRowStyle -Row $script:ProfilesGrid.Rows[$rowIndex]
     }
+}
+
+function Apply-ProfileRowStyle {
+    param([System.Windows.Forms.DataGridViewRow]$Row)
+
+    if ($null -eq $Row -or $null -eq $Row.Tag) {
+        return
+    }
+
+    $colorInfo = Get-ProfileColorInfo -ColorId $Row.Tag.ColorId
+    if ([string]::IsNullOrWhiteSpace($colorInfo.Hex)) {
+        $Row.DefaultCellStyle.BackColor = [System.Drawing.Color]::White
+    } else {
+        $Row.DefaultCellStyle.BackColor = [System.Drawing.ColorTranslator]::FromHtml($colorInfo.Hex)
+    }
+}
+
+function Save-ProfileMetadataFromRow {
+    param([System.Windows.Forms.DataGridViewRow]$Row)
+
+    if ($null -eq $Row -or $Row.IsNewRow -or $null -eq $Row.Tag) {
+        return
+    }
+
+    $profile = $Row.Tag
+    $colorId = [string]$Row.Cells["ColorId"].Value
+    $memo1 = [string]$Row.Cells["Memo1"].Value
+    $memo2 = [string]$Row.Cells["Memo2"].Value
+    $colorInfo = Get-ProfileColorInfo -ColorId $colorId
+
+    $profile.ColorId = [string]$colorInfo.Id
+    $profile.ColorName = [string]$colorInfo.Name
+    $profile.ColorHex = [string]$colorInfo.Hex
+    $profile.Memo1 = $memo1
+    $profile.Memo2 = $memo2
+    Apply-ProfileRowStyle -Row $Row
+
+    Set-ProfileMetadataEntry -UserDataPath $script:UserDataTextBox.Text.Trim() -DirectoryName $profile.DirectoryName -ColorId $profile.ColorId -Memo1 $memo1 -Memo2 $memo2
 }
 
 function Refresh-Profiles {
@@ -637,10 +864,18 @@ function Start-ProfileRefresh {
         "Get-LocalStateProfileInfo",
         "Get-PreferenceProfileInfo",
         "Get-ProfileIconPath",
+        "Get-ProfileColorPalette",
+        "Get-ProfileColorInfo",
+        "Get-ManagerDataPath",
+        "Get-ProfileMetadataPath",
+        "New-ProfileMetadataDocument",
+        "ConvertTo-ProfileMetadataMap",
+        "Read-ProfileMetadata",
         "Get-ChromeProfiles",
         "Write-UiLog",
         "Test-ShouldWriteLogToUi",
-        "Read-Utf8JsonFile"
+        "Read-Utf8JsonFile",
+        "Write-Utf8JsonFile"
     )
     $functionText = ($functionNames | ForEach-Object {
         "function $_ {`r`n$((Get-Command $_ -CommandType Function).Definition)`r`n}"
@@ -929,13 +1164,11 @@ $script:Form.MinimumSize = New-Object System.Drawing.Size(1040, 680)
 $rootPanel = New-Object System.Windows.Forms.TableLayoutPanel
 $rootPanel.Dock = "Fill"
 $rootPanel.ColumnCount = 1
-$rootPanel.RowCount = 5
+$rootPanel.RowCount = 3
 $rootPanel.Padding = New-Object System.Windows.Forms.Padding(10)
 $rootPanel.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 92)))
 $rootPanel.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 42)))
-$rootPanel.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 48)))
-$rootPanel.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 32)))
-$rootPanel.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 20)))
+$rootPanel.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
 $script:Form.Controls.Add($rootPanel)
 
 $pathPanel = New-Object System.Windows.Forms.TableLayoutPanel
@@ -1015,6 +1248,24 @@ $actionPanel.FlowDirection = "LeftToRight"
 $actionPanel.WrapContents = $false
 $rootPanel.Controls.Add($actionPanel, 0, 1)
 
+$script:MainSplit = New-Object System.Windows.Forms.SplitContainer
+$script:MainSplit.Dock = "Fill"
+$script:MainSplit.Orientation = "Horizontal"
+$script:MainSplit.SplitterWidth = 6
+$script:MainSplit.Panel1MinSize = 160
+$script:MainSplit.Panel2MinSize = 160
+$script:MainSplit.SplitterDistance = 420
+$rootPanel.Controls.Add($script:MainSplit, 0, 2)
+
+$script:BottomSplit = New-Object System.Windows.Forms.SplitContainer
+$script:BottomSplit.Dock = "Fill"
+$script:BottomSplit.Orientation = "Horizontal"
+$script:BottomSplit.SplitterWidth = 6
+$script:BottomSplit.Panel1MinSize = 100
+$script:BottomSplit.Panel2MinSize = 70
+$script:BottomSplit.SplitterDistance = 260
+$script:MainSplit.Panel2.Controls.Add($script:BottomSplit)
+
 $script:RefreshButton = New-Object System.Windows.Forms.Button
 $script:RefreshButton.Text = "再読み込み"
 $script:RefreshButton.Width = 105
@@ -1090,6 +1341,7 @@ $script:ProfilesGrid.RowHeadersVisible = $false
 $script:ProfilesGrid.SelectionMode = "FullRowSelect"
 $script:ProfilesGrid.MultiSelect = $false
 $script:ProfilesGrid.AutoSizeColumnsMode = "Fill"
+$script:ProfilesGrid.EditMode = "EditOnEnter"
 
 $selectColumn = New-Object System.Windows.Forms.DataGridViewCheckBoxColumn
 $selectColumn.Name = "SelectColumn"
@@ -1109,6 +1361,17 @@ $iconColumn.FillWeight = 9
 [void]$script:ProfilesGrid.Columns.Add("UserName", "ログインユーザー")
 [void]$script:ProfilesGrid.Columns.Add("GaiaName", "Google名")
 [void]$script:ProfilesGrid.Columns.Add("AvatarIcon", "アイコン情報")
+$colorColumn = New-Object System.Windows.Forms.DataGridViewComboBoxColumn
+$colorColumn.Name = "ColorId"
+$colorColumn.HeaderText = "色"
+$colorColumn.ValueMember = "Id"
+$colorColumn.DisplayMember = "Name"
+$colorColumn.DataSource = [System.Collections.ArrayList](Get-ProfileColorPalette)
+$colorColumn.DisplayStyle = "DropDownButton"
+$colorColumn.FlatStyle = "Flat"
+[void]$script:ProfilesGrid.Columns.Add($colorColumn)
+[void]$script:ProfilesGrid.Columns.Add("Memo1", "メモ1")
+[void]$script:ProfilesGrid.Columns.Add("Memo2", "メモ2")
 [void]$script:ProfilesGrid.Columns.Add("SizeMB", "サイズMB")
 [void]$script:ProfilesGrid.Columns.Add("LastWriteTime", "更新日時")
 [void]$script:ProfilesGrid.Columns.Add("Path", "場所")
@@ -1118,16 +1381,46 @@ $script:ProfilesGrid.Columns["ProfileName"].FillWeight = 18
 $script:ProfilesGrid.Columns["UserName"].FillWeight = 24
 $script:ProfilesGrid.Columns["GaiaName"].FillWeight = 18
 $script:ProfilesGrid.Columns["AvatarIcon"].FillWeight = 22
+$script:ProfilesGrid.Columns["ColorId"].FillWeight = 10
+$script:ProfilesGrid.Columns["Memo1"].FillWeight = 22
+$script:ProfilesGrid.Columns["Memo2"].FillWeight = 22
 $script:ProfilesGrid.Columns["SizeMB"].FillWeight = 10
 $script:ProfilesGrid.Columns["LastWriteTime"].FillWeight = 18
 $script:ProfilesGrid.Columns["Path"].FillWeight = 46
-$rootPanel.Controls.Add($script:ProfilesGrid, 0, 2)
+foreach ($column in $script:ProfilesGrid.Columns) {
+    $column.ReadOnly = $true
+}
+$script:ProfilesGrid.Columns["SelectColumn"].ReadOnly = $false
+$script:ProfilesGrid.Columns["ColorId"].ReadOnly = $false
+$script:ProfilesGrid.Columns["Memo1"].ReadOnly = $false
+$script:ProfilesGrid.Columns["Memo2"].ReadOnly = $false
+$script:ProfilesGrid.Add_CurrentCellDirtyStateChanged({
+    if ($script:ProfilesGrid.IsCurrentCellDirty) {
+        $script:ProfilesGrid.CommitEdit([System.Windows.Forms.DataGridViewDataErrorContexts]::Commit)
+    }
+})
+$script:ProfilesGrid.Add_CellValueChanged({
+    param($Sender, $EventArgs)
+    if ($EventArgs.RowIndex -lt 0 -or $EventArgs.ColumnIndex -lt 0) {
+        return
+    }
+    $columnName = $script:ProfilesGrid.Columns[$EventArgs.ColumnIndex].Name
+    if ($columnName -in @("ColorId", "Memo1", "Memo2")) {
+        Save-ProfileMetadataFromRow -Row $script:ProfilesGrid.Rows[$EventArgs.RowIndex]
+    }
+})
+$script:ProfilesGrid.Add_DataError({
+    param($Sender, $EventArgs)
+    Write-UiLog "プロファイル一覧のセル編集でエラー: $($EventArgs.Exception.Message)" "WARN"
+    $EventArgs.ThrowException = $false
+})
+$script:MainSplit.Panel1.Controls.Add($script:ProfilesGrid)
 
 $zipSplit = New-Object System.Windows.Forms.SplitContainer
 $zipSplit.Dock = "Fill"
 $zipSplit.Orientation = "Vertical"
 $zipSplit.SplitterDistance = 390
-$rootPanel.Controls.Add($zipSplit, 0, 3)
+$script:BottomSplit.Panel1.Controls.Add($zipSplit)
 
 $zipLeftPanel = New-Object System.Windows.Forms.TableLayoutPanel
 $zipLeftPanel.Dock = "Fill"
@@ -1177,7 +1470,7 @@ $script:LogBox.Dock = "Fill"
 $script:LogBox.Multiline = $true
 $script:LogBox.ScrollBars = "Vertical"
 $script:LogBox.ReadOnly = $true
-$rootPanel.Controls.Add($script:LogBox, 0, 4)
+$script:BottomSplit.Panel2.Controls.Add($script:LogBox)
 
 $script:Form.Add_Shown({
     if (-not (Test-Path -LiteralPath $script:BackupPathTextBox.Text)) {

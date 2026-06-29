@@ -121,9 +121,17 @@ function Get-WorkerFunctionText {
         "Get-LocalStateProfileInfo",
         "Get-PreferenceProfileInfo",
         "Get-ProfileIconPath",
+        "Get-ProfileColorPalette",
+        "Get-ProfileColorInfo",
+        "Get-ManagerDataPath",
+        "Get-ProfileMetadataPath",
+        "New-ProfileMetadataDocument",
+        "ConvertTo-ProfileMetadataMap",
+        "Read-ProfileMetadata",
         "Get-ChromeProfiles",
         "Test-ShouldWriteLogToUi",
-        "Read-Utf8JsonFile"
+        "Read-Utf8JsonFile",
+        "Write-Utf8JsonFile"
     )
     return (($functionNames | ForEach-Object {
         "function $_ {`r`n$((Get-Command $_ -CommandType Function).Definition)`r`n}"
@@ -246,6 +254,42 @@ try {
         }.GetNewClosure()
     }
 
+    $colorIds = @("", "red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink", "gray", "brown")
+    for ($i = 0; $i -lt $colorIds.Count; $i++) {
+        Add-Test "色パレット $i" {
+            $info = Get-ProfileColorInfo -ColorId $colorIds[$i]
+            Assert-Equal $colorIds[$i] $info.Id "色ID"
+            if ($colorIds[$i]) {
+                Assert-True ($info.Hex.StartsWith("#")) "色Hexがありません。"
+            }
+        }.GetNewClosure()
+    }
+
+    for ($i = 1; $i -le 15; $i++) {
+        Add-Test "メタ情報保存読込 $i" {
+            $root = New-TestUserData -ProfileCount 1 -RootName "metadata_$i"
+            Set-ProfileMetadataEntry -UserDataPath $root -DirectoryName "Default" -ColorId "blue" -Memo1 "メモ1-$i" -Memo2 "メモ2-$i"
+            $metadata = Read-ProfileMetadata -UserDataPath $root
+            $map = ConvertTo-ProfileMetadataMap -Metadata $metadata
+            Assert-True ($map.ContainsKey("Default")) "メタ情報が保存されていません。"
+            Assert-Equal "blue" $map["Default"].color_id "色ID"
+            Assert-Equal "メモ1-$i" $map["Default"].memo1 "メモ1"
+            Assert-Equal "メモ2-$i" $map["Default"].memo2 "メモ2"
+        }.GetNewClosure()
+    }
+
+    for ($i = 1; $i -le 10; $i++) {
+        Add-Test "メタ情報プロファイル反映 $i" {
+            $root = New-TestUserData -ProfileCount 1 -RootName "metadata_profiles_$i"
+            Set-ProfileMetadataEntry -UserDataPath $root -DirectoryName "Default" -ColorId "green" -Memo1 "分類-$i" -Memo2 "確認-$i"
+            $profiles = Get-ChromeProfiles -UserDataPath $root -SkipIconImage
+            Assert-Equal "green" $profiles[0].ColorId "色ID"
+            Assert-Equal "分類-$i" $profiles[0].Memo1 "メモ1"
+            Assert-Equal "確認-$i" $profiles[0].Memo2 "メモ2"
+            Assert-True ($profiles[0].ColorHex.StartsWith("#")) "色Hex"
+        }.GetNewClosure()
+    }
+
     $iconNames = @("Google Profile Picture.png", "Google Profile Picture", "Profile Picture.png", "Account Avatar.png", "Avatar.png")
     for ($i = 0; $i -lt $iconNames.Count; $i++) {
         Add-Test "アイコンパス検出 $i" {
@@ -291,6 +335,8 @@ try {
             $html = New-ProfileIndexHtmlText -Profiles $profiles -UserDataPath $root -Stage "stage-$i"
             Assert-True ($html.Contains("Chromeプロファイル確認レポート")) "HTMLタイトルなし"
             Assert-True ($html.Contains("ログインユーザー")) "ログインユーザー列なし"
+            Assert-True ($html.Contains("メモ1")) "メモ1列なし"
+            Assert-True ($html.Contains("メモ2")) "メモ2列なし"
             Assert-True ($html.Contains("stage-$i")) "ステージなし"
             Assert-True ($html.Contains("local0@example.com")) "ユーザー名なし"
         }.GetNewClosure()
@@ -300,6 +346,7 @@ try {
         Add-Test "ZIPバックアップ $i" {
             $root = New-TestUserData -ProfileCount 2 -RootName "zip_$i"
             $backup = Join-Path $testRoot "zip_backups_$i"
+            Set-ProfileMetadataEntry -UserDataPath $root -DirectoryName "Default" -ColorId "red" -Memo1 "zipメモ1-$i" -Memo2 "zipメモ2-$i"
             $profiles = Get-ChromeProfiles -UserDataPath $root -SkipIconImage
             $result = New-ProfilesZipBackup -Profiles $profiles -UserDataPath $root -BackupPath $backup -Stage "test$i"
             Assert-True (Test-Path -LiteralPath $result.ZipPath) "ZIPがありません。"
@@ -307,6 +354,7 @@ try {
             try {
                 $names = @($zip.Entries | ForEach-Object FullName)
                 Assert-True ($names -contains "ChromeProfilesReport.html") "レポートがありません。"
+                Assert-True ($names -contains "ChromeProfilesManager/profile_metadata.json") "メタ情報JSONがありません。"
                 Assert-True ($names -contains "Profiles/Default/Preferences") "Default Preferencesがありません。"
                 Assert-True ($names -contains "Profiles/Profile 1/Preferences") "Profile 1 Preferencesがありません。"
             } finally {
