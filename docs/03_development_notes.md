@@ -26,6 +26,10 @@ Markdown と HTML も UTF-8 として扱います。
 
 `tests/Run-Tests.ps1` も日本語文字列を含むため、UTF-8 BOM 付きで保存します。
 
+Chrome の `Local State` と各プロファイルの `Preferences` は、PowerShell 5.1 の既定エンコーディングに依存させず、`Read-Utf8JsonFile` で UTF-8 固定として読み込みます。
+
+これにより、日本語の ProfileName や Google アカウント名が文字化けする問題を防ぎます。
+
 ## 3. ロギング
 
 ログ出力は `Write-UiLog` が担当します。
@@ -45,6 +49,10 @@ Markdown と HTML も UTF-8 として扱います。
 - `ERROR`
 
 Runspace 側の非同期読み込みでもファイルログへ書けるように、worker script へ `Write-UiLog` と `$script:LogFilePath` を渡しています。Runspace 側では `$script:LogBox` を `$null` にして、UI へ直接触れないようにしています。
+
+画面ログには `DEBUG` を表示しません。`DEBUG` はファイルログにだけ保存します。
+
+画面ログへ出すかどうかは `Test-ShouldWriteLogToUi` で判定します。
 
 ## 4. プロファイル検出
 
@@ -179,7 +187,7 @@ HTML に含める主な情報は次の通りです。
 
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1`
 
-現在のテストケース数は 175 件です。
+現在のテストケース数は 190 件です。
 
 テスト対象は次の通りです。
 
@@ -187,6 +195,8 @@ HTML に含める主な情報は次の通りです。
 - ファイルログ出力
 - `Local State` 解析
 - `Preferences` 解析
+- 日本語JSON解析
+- 画面DEBUG抑制
 - アイコンパス検出
 - プロファイル検出
 - `Local State` がない場合の検出

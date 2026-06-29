@@ -9,6 +9,7 @@ $script:AppName = "ChromeProfilesManager"
 $script:DefaultUserDataPath = Join-Path $env:LOCALAPPDATA "Google\Chrome\User Data"
 $script:DefaultBackupPath = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "ChromeProfilesManagerBackups"
 $script:LogFilePath = $null
+$script:ShowDebugLogsInUi = $false
 
 function Initialize-AppLogging {
     param([string]$BackupPath = $script:DefaultBackupPath)
@@ -41,7 +42,7 @@ function Write-UiLog {
         }
     }
 
-    if ($null -ne $script:LogBox) {
+    if ($null -ne $script:LogBox -and (Test-ShouldWriteLogToUi -Level $Level)) {
         $uiLine = $line + "`r`n"
         if ($script:LogBox.InvokeRequired) {
             [void]$script:LogBox.BeginInvoke([Action[string]]{
@@ -52,6 +53,22 @@ function Write-UiLog {
             $script:LogBox.AppendText($uiLine)
         }
     }
+}
+
+function Test-ShouldWriteLogToUi {
+    param(
+        [string]$Level,
+        [bool]$ShowDebug = $script:ShowDebugLogsInUi
+    )
+
+    return ($Level -ne "DEBUG" -or $ShowDebug)
+}
+
+function Read-Utf8JsonFile {
+    param([string]$Path)
+
+    $jsonText = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+    return $jsonText | ConvertFrom-Json
 }
 
 function ConvertTo-HtmlEncoded {
@@ -94,7 +111,7 @@ function Get-LocalStateProfileInfo {
     }
 
     try {
-        $json = Get-Content -LiteralPath $localStatePath -Raw -ErrorAction Stop | ConvertFrom-Json
+        $json = Read-Utf8JsonFile -Path $localStatePath
         if ($json.profile -and $json.profile.info_cache) {
             foreach ($property in $json.profile.info_cache.PSObject.Properties) {
                 $displayName = $property.Value.name
@@ -135,7 +152,7 @@ function Get-PreferenceProfileInfo {
     }
 
     try {
-        $json = Get-Content -LiteralPath $preferencesPath -Raw -ErrorAction Stop | ConvertFrom-Json
+        $json = Read-Utf8JsonFile -Path $preferencesPath
         if ($json.profile -and $json.profile.name) {
             $info.ProfileName = [string]$json.profile.name
         }
@@ -621,7 +638,9 @@ function Start-ProfileRefresh {
         "Get-PreferenceProfileInfo",
         "Get-ProfileIconPath",
         "Get-ChromeProfiles",
-        "Write-UiLog"
+        "Write-UiLog",
+        "Test-ShouldWriteLogToUi",
+        "Read-Utf8JsonFile"
     )
     $functionText = ($functionNames | ForEach-Object {
         "function $_ {`r`n$((Get-Command $_ -CommandType Function).Definition)`r`n}"
@@ -631,6 +650,7 @@ function Start-ProfileRefresh {
 param([string]`$WorkerUserDataPath)
 `$script:LogBox = `$null
 `$script:LogFilePath = '$($script:LogFilePath -replace "'", "''")'
+`$script:ShowDebugLogsInUi = `$false
 $functionText
 Get-ChromeProfiles -UserDataPath `$WorkerUserDataPath -SkipIconImage
 "@

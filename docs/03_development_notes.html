@@ -42,6 +42,8 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 <p>理由は、PowerShell 5.1 が BOM なし UTF-8 の日本語文字列を環境によって正しく解釈できず、構文エラーや文字化けを起こすためです。</p>
 <p>Markdown と HTML も UTF-8 として扱います。</p>
 <p><code>tests/Run-Tests.ps1</code> も日本語文字列を含むため、UTF-8 BOM 付きで保存します。</p>
+<p>Chrome の <code>Local State</code> と各プロファイルの <code>Preferences</code> は、PowerShell 5.1 の既定エンコーディングに依存させず、<code>Read-Utf8JsonFile</code> で UTF-8 固定として読み込みます。</p>
+<p>これにより、日本語の ProfileName や Google アカウント名が文字化けする問題を防ぎます。</p>
 <h2>3. ロギング</h2>
 <p>ログ出力は <code>Write-UiLog</code> が担当します。</p>
 <p>ログは次の2箇所へ出力します。</p>
@@ -58,6 +60,8 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 <li><code>ERROR</code></li>
 </ul>
 <p>Runspace 側の非同期読み込みでもファイルログへ書けるように、worker script へ <code>Write-UiLog</code> と <code>$script:LogFilePath</code> を渡しています。Runspace 側では <code>$script:LogBox</code> を <code>$null</code> にして、UI へ直接触れないようにしています。</p>
+<p>画面ログには <code>DEBUG</code> を表示しません。<code>DEBUG</code> はファイルログにだけ保存します。</p>
+<p>画面ログへ出すかどうかは <code>Test-ShouldWriteLogToUi</code> で判定します。</p>
 <h2>4. プロファイル検出</h2>
 <p>プロファイル検出は <code>Get-ChromeProfiles</code> が担当します。</p>
 <p>対象 User Data フォルダの既定値は次の通りです。</p>
@@ -169,13 +173,15 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 <ul>
 <li><code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1</code></li>
 </ul>
-<p>現在のテストケース数は 175 件です。</p>
+<p>現在のテストケース数は 190 件です。</p>
 <p>テスト対象は次の通りです。</p>
 <ul>
 <li>HTMLエンコード</li>
 <li>ファイルログ出力</li>
 <li><code>Local State</code> 解析</li>
 <li><code>Preferences</code> 解析</li>
+<li>日本語JSON解析</li>
+<li>画面DEBUG抑制</li>
 <li>アイコンパス検出</li>
 <li>プロファイル検出</li>
 <li><code>Local State</code> がない場合の検出</li>
@@ -262,6 +268,10 @@ Markdown と HTML も UTF-8 として扱います。
 
 `tests/Run-Tests.ps1` も日本語文字列を含むため、UTF-8 BOM 付きで保存します。
 
+Chrome の `Local State` と各プロファイルの `Preferences` は、PowerShell 5.1 の既定エンコーディングに依存させず、`Read-Utf8JsonFile` で UTF-8 固定として読み込みます。
+
+これにより、日本語の ProfileName や Google アカウント名が文字化けする問題を防ぎます。
+
 ## 3. ロギング
 
 ログ出力は `Write-UiLog` が担当します。
@@ -281,6 +291,10 @@ Markdown と HTML も UTF-8 として扱います。
 - `ERROR`
 
 Runspace 側の非同期読み込みでもファイルログへ書けるように、worker script へ `Write-UiLog` と `$script:LogFilePath` を渡しています。Runspace 側では `$script:LogBox` を `$null` にして、UI へ直接触れないようにしています。
+
+画面ログには `DEBUG` を表示しません。`DEBUG` はファイルログにだけ保存します。
+
+画面ログへ出すかどうかは `Test-ShouldWriteLogToUi` で判定します。
 
 ## 4. プロファイル検出
 
@@ -415,7 +429,7 @@ HTML に含める主な情報は次の通りです。
 
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1`
 
-現在のテストケース数は 175 件です。
+現在のテストケース数は 190 件です。
 
 テスト対象は次の通りです。
 
@@ -423,6 +437,8 @@ HTML に含める主な情報は次の通りです。
 - ファイルログ出力
 - `Local State` 解析
 - `Preferences` 解析
+- 日本語JSON解析
+- 画面DEBUG抑制
 - アイコンパス検出
 - プロファイル検出
 - `Local State` がない場合の検出

@@ -36,6 +36,8 @@ GitHub repository:
 - 選択したプロファイルを完全削除せず、`_ChromeProfilesManager_Quarantine` に移動
 - 起動直後のプロファイル読み込みをバックグラウンド化
 - 画面ログに加えて、バックアップ先の `logs` フォルダへ詳細ログを保存
+- Chrome の `Local State` と `Preferences` を UTF-8 固定で読み込み、日本語プロファイル名の文字化けを防止
+- 画面ログでは DEBUG を非表示にし、詳細 DEBUG はファイルログに保存
 
 ## テスト
 
@@ -45,7 +47,7 @@ GitHub repository:
 
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1`
 
-現在のテストケース数は 175 件です。
+現在のテストケース数は 190 件です。
 
 ## 推奨作業手順
 

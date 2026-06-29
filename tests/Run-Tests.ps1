@@ -121,7 +121,9 @@ function Get-WorkerFunctionText {
         "Get-LocalStateProfileInfo",
         "Get-PreferenceProfileInfo",
         "Get-ProfileIconPath",
-        "Get-ChromeProfiles"
+        "Get-ChromeProfiles",
+        "Test-ShouldWriteLogToUi",
+        "Read-Utf8JsonFile"
     )
     return (($functionNames | ForEach-Object {
         "function $_ {`r`n$((Get-Command $_ -CommandType Function).Definition)`r`n}"
@@ -183,6 +185,64 @@ try {
             Assert-Equal "PrefName 0" $info.ProfileName "ProfileName"
             Assert-Equal "user0@example.com" $info.UserName "UserName"
             Assert-Equal "User Full 0" $info.GaiaName "GaiaName"
+        }.GetNewClosure()
+    }
+
+    for ($i = 1; $i -le 10; $i++) {
+        Add-Test "日本語JSON解析 $i" {
+            $root = Join-Path $testRoot "jp_$i"
+            $profilePath = Join-Path $root "Profile $i"
+            New-Item -ItemType Directory -Path $profilePath -Force | Out-Null
+
+            $displayName = "仕事用プロファイル $i"
+            $profileName = "個別管理用 $i"
+            $gaiaName = "日本語ユーザー $i"
+            $email = "nihongo$i@example.com"
+
+            $localState = [ordered]@{
+                profile = [ordered]@{
+                    info_cache = [ordered]@{
+                        ("Profile $i") = [ordered]@{
+                            name = $displayName
+                            user_name = $email
+                            gaia_name = $gaiaName
+                            avatar_icon = "chrome://theme/IDR_PROFILE_AVATAR_$i"
+                        }
+                    }
+                }
+            }
+            $pref = [ordered]@{
+                profile = [ordered]@{ name = $profileName }
+                account_info = @([ordered]@{
+                    email = $email
+                    full_name = $gaiaName
+                    given_name = "日本語"
+                })
+            }
+            Write-Utf8Json -Path (Join-Path $root "Local State") -Value $localState
+            Write-Utf8Json -Path (Join-Path $profilePath "Preferences") -Value $pref
+
+            $profiles = Get-ChromeProfiles -UserDataPath $root -SkipIconImage
+            Assert-Equal 1 $profiles.Count "日本語プロファイル件数"
+            Assert-Equal $displayName $profiles[0].DisplayName "日本語表示名"
+            Assert-Equal $profileName $profiles[0].ProfileName "日本語ProfileName"
+            Assert-Equal $gaiaName $profiles[0].GaiaName "日本語Google名"
+            Assert-True (-not $profiles[0].DisplayName.Contains("繝")) "表示名が文字化けしています。"
+        }.GetNewClosure()
+    }
+
+    for ($i = 1; $i -le 5; $i++) {
+        Add-Test "画面DEBUG抑制 $i" {
+            $oldShowDebug = $script:ShowDebugLogsInUi
+            try {
+                $script:ShowDebugLogsInUi = $false
+                Assert-True (-not (Test-ShouldWriteLogToUi -Level "DEBUG")) "DEBUGが画面ログ対象になっています。"
+                Assert-True (Test-ShouldWriteLogToUi -Level "INFO") "INFOが画面ログ対象になっていません。"
+                Assert-True (Test-ShouldWriteLogToUi -Level "WARN") "WARNが画面ログ対象になっていません。"
+                Assert-True (Test-ShouldWriteLogToUi -Level "DEBUG" -ShowDebug $true) "DEBUG表示ONでもDEBUGが画面ログ対象になっていません。"
+            } finally {
+                $script:ShowDebugLogsInUi = $oldShowDebug
+            }
         }.GetNewClosure()
     }
 
