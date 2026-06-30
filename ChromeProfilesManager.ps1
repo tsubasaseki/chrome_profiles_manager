@@ -750,6 +750,8 @@ function New-BackupProgressState {
         TotalFiles = 0
         AddedFiles = 0
         SkippedFiles = 0
+        StartTimeTicks = 0
+        ZipStartTimeTicks = 0
         Completed = $false
         Failed = $false
         ErrorMessage = ""
@@ -772,6 +774,8 @@ function Set-BackupProgressState {
         [AllowNull()][object]$TotalFiles,
         [AllowNull()][object]$AddedFiles,
         [AllowNull()][object]$SkippedFiles,
+        [AllowNull()][object]$StartTimeTicks,
+        [AllowNull()][object]$ZipStartTimeTicks,
         [AllowNull()][object]$Completed,
         [AllowNull()][object]$Failed,
         [string]$ErrorMessage,
@@ -794,6 +798,8 @@ function Set-BackupProgressState {
     if ($PSBoundParameters.ContainsKey("TotalFiles") -and $null -ne $TotalFiles) { $ProgressState.TotalFiles = [int]$TotalFiles }
     if ($PSBoundParameters.ContainsKey("AddedFiles") -and $null -ne $AddedFiles) { $ProgressState.AddedFiles = [int]$AddedFiles }
     if ($PSBoundParameters.ContainsKey("SkippedFiles") -and $null -ne $SkippedFiles) { $ProgressState.SkippedFiles = [int]$SkippedFiles }
+    if ($PSBoundParameters.ContainsKey("StartTimeTicks") -and $null -ne $StartTimeTicks) { $ProgressState.StartTimeTicks = [int64]$StartTimeTicks }
+    if ($PSBoundParameters.ContainsKey("ZipStartTimeTicks") -and $null -ne $ZipStartTimeTicks) { $ProgressState.ZipStartTimeTicks = [int64]$ZipStartTimeTicks }
     if ($PSBoundParameters.ContainsKey("Completed") -and $null -ne $Completed) { $ProgressState.Completed = [bool]$Completed }
     if ($PSBoundParameters.ContainsKey("Failed") -and $null -ne $Failed) { $ProgressState.Failed = [bool]$Failed }
     if ($PSBoundParameters.ContainsKey("ErrorMessage")) { $ProgressState.ErrorMessage = $ErrorMessage }
@@ -810,6 +816,68 @@ function Get-BackupProgressPercent {
         return 0
     }
     return [Math]::Max(0, [Math]::Min(100, [int][Math]::Floor(($ProcessedFiles / $TotalFiles) * 100)))
+}
+
+function Format-BackupRemainingTime {
+    param([TimeSpan]$Remaining)
+
+    if ($Remaining.TotalSeconds -lt 0) {
+        $Remaining = [TimeSpan]::Zero
+    }
+
+    if ($Remaining.TotalHours -ge 1) {
+        return "{0}時間{1:D2}分" -f [int][Math]::Floor($Remaining.TotalHours), $Remaining.Minutes
+    }
+    if ($Remaining.TotalMinutes -ge 1) {
+        return "{0}分{1:D2}秒" -f [int][Math]::Floor($Remaining.TotalMinutes), $Remaining.Seconds
+    }
+    return "{0}秒" -f [Math]::Max(0, [int][Math]::Ceiling($Remaining.TotalSeconds))
+}
+
+function Get-BackupEstimatedRemainingText {
+    param(
+        [int]$ProcessedFiles,
+        [int]$TotalFiles,
+        [Int64]$ZipStartTimeTicks,
+        [DateTime]$Now = (Get-Date)
+    )
+
+    if ($TotalFiles -le 0 -or $ProcessedFiles -le 0 -or $ZipStartTimeTicks -le 0) {
+        return "計算中"
+    }
+    if ($ProcessedFiles -ge $TotalFiles) {
+        return "0秒"
+    }
+
+    $start = New-Object DateTime($ZipStartTimeTicks)
+    $elapsed = $Now - $start
+    if ($elapsed.TotalSeconds -le 0) {
+        return "計算中"
+    }
+
+    $secondsPerFile = $elapsed.TotalSeconds / $ProcessedFiles
+    $remainingFiles = [Math]::Max(0, $TotalFiles - $ProcessedFiles)
+    return (Format-BackupRemainingTime -Remaining ([TimeSpan]::FromSeconds($secondsPerFile * $remainingFiles)))
+}
+
+function Get-BackupProgressLabelText {
+    param([AllowNull()][hashtable]$ProgressState)
+
+    if ($null -eq $ProgressState) {
+        return "ZIP待機中"
+    }
+    if ($ProgressState.Failed) {
+        return "ZIP失敗: $($ProgressState.ErrorMessage)"
+    }
+    if ($ProgressState.Completed) {
+        return "ZIP完了: 100%（$($ProgressState.ProcessedFiles) / $($ProgressState.TotalFiles)件） 残り約 0秒 / 追加:$($ProgressState.AddedFiles) スキップ:$($ProgressState.SkippedFiles)"
+    }
+    if ($ProgressState.IsIndeterminate -or [int]$ProgressState.TotalFiles -le 0) {
+        return "$($ProgressState.Status): 進捗計算中 / 残り約 計算中 / 追加:$($ProgressState.AddedFiles) スキップ:$($ProgressState.SkippedFiles)"
+    }
+
+    $remaining = Get-BackupEstimatedRemainingText -ProcessedFiles ([int]$ProgressState.ProcessedFiles) -TotalFiles ([int]$ProgressState.TotalFiles) -ZipStartTimeTicks ([int64]$ProgressState.ZipStartTimeTicks)
+    return "ZIP進捗: $($ProgressState.Percent)%（$($ProgressState.ProcessedFiles) / $($ProgressState.TotalFiles)件） 残り約 $remaining / 追加:$($ProgressState.AddedFiles) スキップ:$($ProgressState.SkippedFiles)"
 }
 
 function New-ProfilesZipBackup {
@@ -831,7 +899,8 @@ function New-ProfilesZipBackup {
         Remove-Item -LiteralPath $zipPath -Force
     }
 
-    Set-BackupProgressState -ProgressState $ProgressState -Phase "counting" -Status "ZIP対象ファイルを確認中..." -IsIndeterminate $true -TotalProfiles $Profiles.Count -ProcessedFiles 0 -TotalFiles 0 -AddedFiles 0 -SkippedFiles 0 -ZipPath $zipPath
+    $backupStartTicks = (Get-Date).Ticks
+    Set-BackupProgressState -ProgressState $ProgressState -Phase "counting" -Status "ZIP対象ファイル確認中" -IsIndeterminate $true -TotalProfiles $Profiles.Count -ProcessedFiles 0 -TotalFiles 0 -AddedFiles 0 -SkippedFiles 0 -StartTimeTicks $backupStartTicks -ZipPath $zipPath
 
     $fileTasks = New-Object System.Collections.Generic.List[object]
     $localState = Join-Path $UserDataPath "Local State"
@@ -847,7 +916,8 @@ function New-ProfilesZipBackup {
     $profileIndex = 0
     foreach ($profile in $Profiles) {
         $profileIndex++
-        Set-BackupProgressState -ProgressState $ProgressState -Phase "counting" -Status "ZIP対象確認中: $($profile.DirectoryName) ($profileIndex / $($Profiles.Count))" -CurrentProfile $profile.DirectoryName -ProfileIndex $profileIndex
+        Write-UiLog "ZIP対象確認中: $($profile.DirectoryName) ($profileIndex / $($Profiles.Count))" "INFO"
+        Set-BackupProgressState -ProgressState $ProgressState -Phase "counting" -Status "ZIP対象ファイル確認中" -CurrentProfile $profile.DirectoryName -ProfileIndex $profileIndex
         $root = $profile.Path
         if ([string]::IsNullOrWhiteSpace($root) -or -not (Test-Path -LiteralPath $root)) {
             Write-UiLog "ZIP対象プロファイルが見つかりません: $($profile.DirectoryName) Path=$root" "WARN"
@@ -868,9 +938,11 @@ function New-ProfilesZipBackup {
     $skipped = 0
     $processed = 0
     $totalFiles = $fileTasks.Count + 1
+    $zipStartTicks = (Get-Date).Ticks
 
     try {
-        Set-BackupProgressState -ProgressState $ProgressState -Phase "zipping" -Status "HTMLレポートをZIPに追加中..." -IsIndeterminate $false -Percent 0 -ProcessedFiles 0 -TotalFiles $totalFiles -CurrentProfile "" -CurrentFile "ChromeProfilesReport.html"
+        Write-UiLog "ZIPへ追加中: ChromeProfilesReport.html" "DEBUG"
+        Set-BackupProgressState -ProgressState $ProgressState -Phase "zipping" -Status "ZIP作成中" -IsIndeterminate $false -Percent 0 -ProcessedFiles 0 -TotalFiles $totalFiles -ZipStartTimeTicks $zipStartTicks -CurrentProfile "" -CurrentFile "ChromeProfilesReport.html"
         $htmlEntry = $zip.CreateEntry("ChromeProfilesReport.html", [System.IO.Compression.CompressionLevel]::Optimal)
         $writer = New-Object System.IO.StreamWriter($htmlEntry.Open(), [System.Text.Encoding]::UTF8)
         try {
@@ -880,11 +952,12 @@ function New-ProfilesZipBackup {
         }
         $added++
         $processed++
-        Set-BackupProgressState -ProgressState $ProgressState -Phase "zipping" -Status "ZIPへ追加中: HTMLレポート" -Percent (Get-BackupProgressPercent -ProcessedFiles $processed -TotalFiles $totalFiles) -ProcessedFiles $processed -AddedFiles $added -SkippedFiles $skipped
+        Set-BackupProgressState -ProgressState $ProgressState -Phase "zipping" -Status "ZIP作成中" -Percent (Get-BackupProgressPercent -ProcessedFiles $processed -TotalFiles $totalFiles) -ProcessedFiles $processed -TotalFiles $totalFiles -AddedFiles $added -SkippedFiles $skipped
 
         foreach ($task in $fileTasks) {
             $currentProfile = [string]$task.ProfileName
             $currentFile = [string]$task.EntryName
+            Write-UiLog "ZIPへ追加中: $currentFile" "DEBUG"
 
             if (Add-FileToZip -Zip $zip -SourceFile $task.SourceFile -EntryName $task.EntryName) {
                 $added++
@@ -892,7 +965,7 @@ function New-ProfilesZipBackup {
                 $skipped++
             }
             $processed++
-            Set-BackupProgressState -ProgressState $ProgressState -Phase "zipping" -Status "ZIPへ追加中: $currentFile" -CurrentProfile $currentProfile -CurrentFile $currentFile -ProfileIndex ([int]$task.ProfileIndex) -Percent (Get-BackupProgressPercent -ProcessedFiles $processed -TotalFiles $totalFiles) -ProcessedFiles $processed -TotalFiles $totalFiles -AddedFiles $added -SkippedFiles $skipped
+            Set-BackupProgressState -ProgressState $ProgressState -Phase "zipping" -Status "ZIP作成中" -CurrentProfile $currentProfile -CurrentFile $currentFile -ProfileIndex ([int]$task.ProfileIndex) -Percent (Get-BackupProgressPercent -ProcessedFiles $processed -TotalFiles $totalFiles) -ProcessedFiles $processed -TotalFiles $totalFiles -AddedFiles $added -SkippedFiles $skipped
         }
     } finally {
         $zip.Dispose()
@@ -946,6 +1019,22 @@ function Refresh-ZipList {
         ForEach-Object {
             [void]$script:ZipListBox.Items.Add($_.FullName)
         }
+}
+
+function Select-ZipListItem {
+    param([string]$ZipPath)
+
+    if ($null -eq $script:ZipListBox -or [string]::IsNullOrWhiteSpace($ZipPath)) {
+        return $false
+    }
+
+    for ($i = 0; $i -lt $script:ZipListBox.Items.Count; $i++) {
+        if ([string]$script:ZipListBox.Items[$i] -eq $ZipPath) {
+            $script:ZipListBox.SelectedIndex = $i
+            return $true
+        }
+    }
+    return $false
 }
 
 function Set-ProfileRefreshBusy {
@@ -1120,15 +1209,7 @@ function Update-BackupProgressUi {
     }
 
     if ($script:BackupProgressLabel) {
-        $profilePart = ""
-        if (-not [string]::IsNullOrWhiteSpace($ProgressState.CurrentProfile)) {
-            $profilePart = " / $($ProgressState.CurrentProfile)"
-        }
-        $countPart = ""
-        if ([int]$ProgressState.TotalFiles -gt 0) {
-            $countPart = " $($ProgressState.ProcessedFiles)/$($ProgressState.TotalFiles)件"
-        }
-        $script:BackupProgressLabel.Text = "$($ProgressState.Status)$profilePart$countPart 追加:$($ProgressState.AddedFiles) スキップ:$($ProgressState.SkippedFiles)"
+        $script:BackupProgressLabel.Text = Get-BackupProgressLabelText -ProgressState $ProgressState
         if ($ProgressState.Failed) {
             $script:BackupProgressLabel.ForeColor = [System.Drawing.Color]::DarkRed
         } elseif ($ProgressState.Completed) {
@@ -1316,6 +1397,9 @@ function Start-Backup {
         "Add-FileToZip",
         "Set-BackupProgressState",
         "Get-BackupProgressPercent",
+        "Format-BackupRemainingTime",
+        "Get-BackupEstimatedRemainingText",
+        "Get-BackupProgressLabelText",
         "New-ProfileIndexHtmlText",
         "New-ProfilesZipBackup"
     )
@@ -1362,7 +1446,16 @@ try {
             Write-UiLog "バックアップを作成しました: $($result.ZipPath)"
             Write-UiLog "追加ファイル: $($result.AddedFiles); スキップ: $($result.SkippedFiles); 対象: $($result.TotalFiles)"
             Refresh-ZipList
-            [System.Windows.Forms.MessageBox]::Show("バックアップを作成しました:`r`n$($result.ZipPath)", $script:AppName) | Out-Null
+            [void](Select-ZipListItem -ZipPath $result.ZipPath)
+            $inspectResult = [System.Windows.Forms.MessageBox]::Show(
+                "バックアップを作成しました:`r`n$($result.ZipPath)`r`n`r`nこのZIPの内容を確認しますか？",
+                $script:AppName,
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            )
+            if ($inspectResult -eq [System.Windows.Forms.DialogResult]::Yes) {
+                Inspect-SelectedZip
+            }
         } catch {
             Set-BackupProgressState -ProgressState $script:BackupState.ProgressState -Phase "failed" -Status "ZIPバックアップに失敗しました" -IsIndeterminate $false -Failed $true -ErrorMessage $_.Exception.Message
             Update-BackupProgressUi -ProgressState $script:BackupState.ProgressState
@@ -1475,6 +1568,15 @@ function Inspect-SelectedZip {
         Write-UiLog "ZIP内容確認に失敗しました: $($_.Exception.Message)"
         [System.Windows.Forms.MessageBox]::Show("ZIP内容を確認できませんでした:`r`n$($_.Exception.Message)", $script:AppName, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
     }
+}
+
+function Open-SelectedZipFile {
+    $zipPath = [string]$script:ZipListBox.SelectedItem
+    if ([string]::IsNullOrWhiteSpace($zipPath) -or -not (Test-Path -LiteralPath $zipPath)) {
+        [System.Windows.Forms.MessageBox]::Show("開くZIPを選択してください。", $script:AppName) | Out-Null
+        return
+    }
+    Open-PathInExplorer -Path $zipPath
 }
 
 function Open-PathInExplorer {
@@ -1900,6 +2002,12 @@ $inspectZipButton.Text = "内容確認"
 $inspectZipButton.Width = 82
 $inspectZipButton.Add_Click({ Inspect-SelectedZip })
 $zipHeaderPanel.Controls.Add($inspectZipButton)
+
+$openZipButton = New-Object System.Windows.Forms.Button
+$openZipButton.Text = "ZIPを開く"
+$openZipButton.Width = 82
+$openZipButton.Add_Click({ Open-SelectedZipFile })
+$zipHeaderPanel.Controls.Add($openZipButton)
 
 $script:ZipListBox = New-Object System.Windows.Forms.ListBox
 $script:ZipListBox.Dock = "Fill"

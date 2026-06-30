@@ -135,6 +135,9 @@ function Get-WorkerFunctionText {
         "New-BackupProgressState",
         "Set-BackupProgressState",
         "Get-BackupProgressPercent",
+        "Format-BackupRemainingTime",
+        "Get-BackupEstimatedRemainingText",
+        "Get-BackupProgressLabelText",
         "Read-Utf8JsonFile",
         "Write-Utf8JsonFile"
     )
@@ -154,6 +157,9 @@ function Get-BackupWorkerFunctionText {
         "Add-FileToZip",
         "Set-BackupProgressState",
         "Get-BackupProgressPercent",
+        "Format-BackupRemainingTime",
+        "Get-BackupEstimatedRemainingText",
+        "Get-BackupProgressLabelText",
         "New-ProfileIndexHtmlText",
         "New-ProfilesZipBackup"
     )
@@ -442,6 +448,54 @@ try {
         }.GetNewClosure()
     }
 
+    $remainingCases = @(
+        @([TimeSpan]::FromSeconds(0), "0秒"),
+        @([TimeSpan]::FromSeconds(9.2), "10秒"),
+        @([TimeSpan]::FromSeconds(59), "59秒"),
+        @([TimeSpan]::FromSeconds(60), "1分00秒"),
+        @([TimeSpan]::FromSeconds(200), "3分20秒"),
+        @([TimeSpan]::FromSeconds(3900), "1時間05分"),
+        @([TimeSpan]::FromSeconds(-5), "0秒")
+    )
+    for ($i = 0; $i -lt $remainingCases.Count; $i++) {
+        Add-Test "ZIP残り時間表示 $i" {
+            Assert-Equal $remainingCases[$i][1] (Format-BackupRemainingTime -Remaining $remainingCases[$i][0]) "残り時間表示"
+        }.GetNewClosure()
+    }
+
+    for ($i = 1; $i -le 5; $i++) {
+        Add-Test "ZIP進捗ラベル $i" {
+            $state = New-BackupProgressState
+            $start = (Get-Date).AddSeconds(-10)
+            Set-BackupProgressState -ProgressState $state -Phase "zipping" -Status "ZIP作成中" -IsIndeterminate $false -Percent 50 -ProcessedFiles 10 -TotalFiles 20 -AddedFiles 9 -SkippedFiles 1 -ZipStartTimeTicks $start.Ticks -CurrentFile "Profiles\Default\VeryLongFileName-$i.txt" -CurrentProfile "Default"
+            $text = Get-BackupProgressLabelText -ProgressState $state
+            Assert-True ($text.Contains("ZIP進捗: 50%")) "進捗率がありません。"
+            Assert-True ($text.Contains("10 / 20件")) "件数がありません。"
+            Assert-True ($text.Contains("残り約")) "残り時間がありません。"
+            Assert-True ($text.Contains("追加:9")) "追加数がありません。"
+            Assert-True ($text.Contains("スキップ:1")) "スキップ数がありません。"
+            Assert-True (-not $text.Contains("ZIPへ追加中")) "詳細追加メッセージが進捗ラベルに混入しています。"
+            Assert-True (-not $text.Contains("VeryLongFileName")) "ファイル名が進捗ラベルに混入しています。"
+            Assert-True (-not $text.Contains("Default")) "プロファイル名が進捗ラベルに混入しています。"
+        }.GetNewClosure()
+    }
+
+    Add-Test "ZIP進捗ラベル 計算中" {
+        $state = New-BackupProgressState
+        Set-BackupProgressState -ProgressState $state -Phase "counting" -Status "ZIP対象ファイル確認中" -IsIndeterminate $true -AddedFiles 0 -SkippedFiles 0
+        $text = Get-BackupProgressLabelText -ProgressState $state
+        Assert-True ($text.Contains("進捗計算中")) "計算中表示がありません。"
+        Assert-True ($text.Contains("残り約 計算中")) "残り時間計算中表示がありません。"
+    }
+
+    Add-Test "ZIP進捗ラベル 完了" {
+        $state = New-BackupProgressState
+        Set-BackupProgressState -ProgressState $state -Phase "completed" -Status "ZIPバックアップ作成完了" -IsIndeterminate $false -Percent 100 -ProcessedFiles 20 -TotalFiles 20 -AddedFiles 19 -SkippedFiles 1 -Completed $true
+        $text = Get-BackupProgressLabelText -ProgressState $state
+        Assert-True ($text.Contains("ZIP完了: 100%")) "完了表示がありません。"
+        Assert-True ($text.Contains("残り約 0秒")) "完了時の残り時間が0秒ではありません。"
+    }
+
     for ($i = 1; $i -le 10; $i++) {
         Add-Test "ZIPバックアップ $i" {
             $root = New-TestUserData -ProfileCount 2 -RootName "zip_$i"
@@ -456,6 +510,7 @@ try {
             Assert-Equal $result.AddedFiles $progress.AddedFiles "進捗の追加数"
             Assert-Equal $result.SkippedFiles $progress.SkippedFiles "進捗のスキップ数"
             Assert-Equal $result.TotalFiles $progress.TotalFiles "進捗の総数"
+            Assert-Equal "0秒" (Get-BackupEstimatedRemainingText -ProcessedFiles $progress.ProcessedFiles -TotalFiles $progress.TotalFiles -ZipStartTimeTicks $progress.ZipStartTimeTicks) "完了後の残り時間"
             $zip = [System.IO.Compression.ZipFile]::OpenRead($result.ZipPath)
             try {
                 $names = @($zip.Entries | ForEach-Object FullName)
