@@ -623,3 +623,20 @@ Codex は、次の改善を実装しました。
 この改善に合わせて、ZIP残り時間表示、ZIP進捗ラベル、進捗ラベルへの詳細ファイル名混入防止のテストを追加しました。
 
 テスト件数は279件になり、すべて成功しました。
+
+## 36. HTMLレポートへのプロフィール画像埋め込み依頼
+
+ユーザーは、HTMLにプロフィール画像などもすべて埋め込みで出力し、SingleFileHTMLとして閲覧できるようにしたいと依頼しました。
+
+Codex は、次の改善を実装しました。
+
+- プロフィール画像ファイルをBase64のData URIへ変換する `Convert-FileToDataUri` を追加した。
+- 拡張子から画像MIMEタイプを判定する `Get-ImageMimeType` を追加した。
+- HTMLレポートのアイコン列へ埋め込み画像を出力する `New-EmbeddedProfileIconHtml` を追加した。
+- `Google Profile Picture.png` などが存在する場合、HTMLレポート内に `<img>` として直接埋め込むようにした。
+- ZIP作成用Runspaceへ渡すプロファイル情報にも `IconPath` を含め、ZIP内の `ChromeProfilesReport.html` でも画像を埋め込めるようにした。
+- 画像がない場合は、従来通り Chrome の `avatar_icon` 識別子を表示するようにした。
+
+この改善に合わせて、HTMLレポートに `data:image/png;base64,` が含まれること、ローカル画像パスを参照しないこと、MIMEタイプ判定のテストを追加しました。
+
+テスト件数は280件になり、すべて成功しました。

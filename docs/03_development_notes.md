@@ -189,6 +189,7 @@ HTML に含める主な情報は次の通りです。
 - ログインユーザー
 - Google名
 - アイコン情報
+- 埋め込みプロフィール画像
 - 色
 - メモ1
 - メモ2
@@ -201,6 +202,10 @@ HTMLレポートの表は `.table-wrap` で横スクロール可能にし、`col
 長いメールアドレス、Chromeアバター識別子、フルパスは `overflow-wrap: anywhere` で折り返します。
 
 未設定色の場合は空の `background:` を出力せず、色がある場合だけ `background-color` を出力します。
+
+プロフィール画像は `Convert-FileToDataUri` でBase64のData URIへ変換し、`New-EmbeddedProfileIconHtml` が `<img>` タグとしてHTMLへ埋め込みます。
+
+ZIP作成用Runspaceへ渡すプロファイル情報にも `IconPath` を含めるため、ZIP内の `ChromeProfilesReport.html` でも画像を埋め込めます。
 
 ## 9. 隔離処理
 
@@ -241,7 +246,7 @@ HTMLレポートの表は `.table-wrap` で横スクロール可能にし、`col
 
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1`
 
-現在のテストケース数は 279 件です。
+現在のテストケース数は 280 件です。
 
 テスト対象は次の通りです。
 
@@ -258,6 +263,7 @@ HTMLレポートの表は `.table-wrap` で横スクロール可能にし、`col
 - メタ情報プロファイル反映
 - アイコンパス検出
 - アイコン48px表示
+- HTML画像DataURI
 - プロファイル検出
 - `Local State` がない場合の検出
 - `Preferences` がない場合の検出

@@ -49,6 +49,7 @@ GitHub repository:
 - ZIP追加中の詳細ファイル名はログへ出力し、進捗表示とは分離
 - 完成したZIPは一覧で選択され、内容確認やExplorerで開く操作が可能
 - HTMLレポートは横スクロール可能な表として生成し、長いパスやメールでも崩れにくく表示
+- HTMLレポートにはローカルに保存されているプロフィール画像をData URIで埋め込み、SingleFileHTMLとして閲覧可能
 
 ## テスト
 
@@ -58,7 +59,7 @@ GitHub repository:
 
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1`
 
-現在のテストケース数は 279 件です。
+現在のテストケース数は 280 件です。
 
 ## 推奨作業手順
 
@@ -75,7 +76,7 @@ GitHub repository:
 - ProfileName: 各プロファイルの `Preferences` から取得
 - ログインユーザー: 取得できる場合はメールアドレスなどを表示
 - Google名: 取得できる場合はGoogleアカウント名を表示
-- アイコン: `Google Profile Picture.png` などが保存されている場合に48px相当で画像表示
+- アイコン: `Google Profile Picture.png` などが保存されている場合に48px相当で画像表示し、HTMLレポートにも埋め込み表示
 - アイコン情報: Chrome内蔵アバターの場合は `avatar_icon` の識別子を表示
 
 ## 安全設計
