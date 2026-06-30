@@ -323,6 +323,60 @@ function ConvertTo-HtmlEncoded {
     return [System.Net.WebUtility]::HtmlEncode($Value)
 }
 
+function Get-ImageMimeType {
+    param([AllowNull()][string]$Path)
+
+    $extension = [System.IO.Path]::GetExtension([string]$Path).ToLowerInvariant()
+    switch ($extension) {
+        ".jpg" { return "image/jpeg" }
+        ".jpeg" { return "image/jpeg" }
+        ".gif" { return "image/gif" }
+        ".bmp" { return "image/bmp" }
+        ".webp" { return "image/webp" }
+        default { return "image/png" }
+    }
+}
+
+function Convert-FileToDataUri {
+    param([AllowNull()][string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path)) {
+        return ""
+    }
+
+    try {
+        $mimeType = Get-ImageMimeType -Path $Path
+        $bytes = [System.IO.File]::ReadAllBytes($Path)
+        $base64 = [Convert]::ToBase64String($bytes)
+        return "data:$mimeType;base64,$base64"
+    } catch {
+        Write-UiLog "HTML埋め込み画像の読み込みに失敗しました: $Path - $($_.Exception.Message)" "WARN"
+        return ""
+    }
+}
+
+function New-EmbeddedProfileIconHtml {
+    param([AllowNull()][object]$Profile)
+
+    if ($null -eq $Profile) {
+        return ""
+    }
+
+    $avatarText = ConvertTo-HtmlEncoded $Profile.AvatarIcon
+    $dataUri = Convert-FileToDataUri -Path $Profile.IconPath
+    if (-not [string]::IsNullOrWhiteSpace($dataUri)) {
+        $alt = ConvertTo-HtmlEncoded ("{0} アイコン" -f $Profile.DisplayName)
+        $encodedDataUri = ConvertTo-HtmlEncoded $dataUri
+        $caption = ""
+        if (-not [string]::IsNullOrWhiteSpace($avatarText)) {
+            $caption = "<div class='avatar-text'>$avatarText</div>"
+        }
+        return "<img class='profile-icon' src='$encodedDataUri' alt='$alt'>$caption"
+    }
+
+    return $avatarText
+}
+
 function Get-ChromeProcesses {
     return @(Get-Process -Name chrome -ErrorAction SilentlyContinue)
 }
@@ -599,6 +653,7 @@ function New-ProfileIndexHtmlText {
         if (-not [string]::IsNullOrWhiteSpace($profile.ColorHex)) {
             $colorStyle = " style='background-color:$((ConvertTo-HtmlEncoded $profile.ColorHex));'"
         }
+        $iconHtml = New-EmbeddedProfileIconHtml -Profile $profile
 
         [void]$rows.AppendLine("<tr>")
         [void]$rows.AppendLine("<td class='directory'>$((ConvertTo-HtmlEncoded $profile.DirectoryName))</td>")
@@ -606,7 +661,7 @@ function New-ProfileIndexHtmlText {
         [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.ProfileName))</td>")
         [void]$rows.AppendLine("<td class='email'>$((ConvertTo-HtmlEncoded $profile.UserName))</td>")
         [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.GaiaName))</td>")
-        [void]$rows.AppendLine("<td class='avatar'>$((ConvertTo-HtmlEncoded $profile.AvatarIcon))</td>")
+        [void]$rows.AppendLine("<td class='avatar'>$iconHtml</td>")
         [void]$rows.AppendLine("<td class='color'$colorStyle>$((ConvertTo-HtmlEncoded $profile.ColorName))</td>")
         [void]$rows.AppendLine("<td class='memo'>$((ConvertTo-HtmlEncoded $profile.Memo1))</td>")
         [void]$rows.AppendLine("<td class='memo'>$((ConvertTo-HtmlEncoded $profile.Memo2))</td>")
@@ -635,6 +690,8 @@ th { position: sticky; top: 0; z-index: 1; background: #eef3f8; text-align: left
 .directory { min-width: 120px; }
 .email { min-width: 180px; }
 .avatar { min-width: 190px; }
+.profile-icon { display: block; width: 48px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid #d9e2ec; background: #fff; }
+.avatar-text { margin-top: 6px; color: #52616b; font-size: 12px; overflow-wrap: anywhere; }
 .color { min-width: 78px; text-align: center; font-weight: 600; }
 .memo { min-width: 160px; }
 .updated { min-width: 190px; white-space: nowrap; }
@@ -1380,6 +1437,7 @@ function Start-Backup {
             ColorHex = [string]$_.ColorHex
             Memo1 = [string]$_.Memo1
             Memo2 = [string]$_.Memo2
+            IconPath = [string]$_.IconPath
             Path = [string]$_.Path
             SizeBytes = [int64]$_.SizeBytes
             SizeMB = $_.SizeMB
@@ -1391,6 +1449,9 @@ function Start-Backup {
         "Write-UiLog",
         "Test-ShouldWriteLogToUi",
         "ConvertTo-HtmlEncoded",
+        "Get-ImageMimeType",
+        "Convert-FileToDataUri",
+        "New-EmbeddedProfileIconHtml",
         "Format-LastWriteTimeWithAge",
         "Get-ManagerDataPath",
         "Get-ProfileMetadataPath",

@@ -132,6 +132,9 @@ function Get-WorkerFunctionText {
         "Read-ProfileMetadata",
         "Get-ChromeProfiles",
         "Test-ShouldWriteLogToUi",
+        "Get-ImageMimeType",
+        "Convert-FileToDataUri",
+        "New-EmbeddedProfileIconHtml",
         "New-BackupProgressState",
         "Set-BackupProgressState",
         "Get-BackupProgressPercent",
@@ -151,6 +154,9 @@ function Get-BackupWorkerFunctionText {
         "Write-UiLog",
         "Test-ShouldWriteLogToUi",
         "ConvertTo-HtmlEncoded",
+        "Get-ImageMimeType",
+        "Convert-FileToDataUri",
+        "New-EmbeddedProfileIconHtml",
         "Format-LastWriteTimeWithAge",
         "Get-ManagerDataPath",
         "Get-ProfileMetadataPath",
@@ -415,6 +421,16 @@ try {
     for ($i = 1; $i -le 15; $i++) {
         Add-Test "HTMLレポート $i" {
             $root = New-TestUserData -ProfileCount 2 -RootName "html_$i"
+            $iconPath = Join-Path (Join-Path $root "Default") "Google Profile Picture.png"
+            $bitmap = New-Object System.Drawing.Bitmap(8, 8)
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            try {
+                $graphics.Clear([System.Drawing.Color]::Blue)
+                $bitmap.Save($iconPath, [System.Drawing.Imaging.ImageFormat]::Png)
+            } finally {
+                $graphics.Dispose()
+                $bitmap.Dispose()
+            }
             $profiles = Get-ChromeProfiles -UserDataPath $root -SkipIconImage
             $html = New-ProfileIndexHtmlText -Profiles $profiles -UserDataPath $root -Stage "stage-$i"
             Assert-True ($html.Contains("Chromeプロファイル確認レポート")) "HTMLタイトルなし"
@@ -428,7 +444,17 @@ try {
             Assert-True ($html.Contains("min-width: 1680px")) "横スクロール用の最小幅がありません。"
             Assert-True (-not $html.Contains("background:;")) "空のbackground指定があります。"
             Assert-True (-not $html.Contains('<th style="width:')) "破綻しやすいth幅指定が残っています。"
+            Assert-True ($html.Contains("data:image/png;base64,")) "プロフィール画像がdata URIで埋め込まれていません。"
+            Assert-True ($html.Contains("class='profile-icon'")) "プロフィール画像タグがありません。"
+            Assert-True (-not $html.Contains($iconPath)) "HTMLがローカル画像パスを参照しています。"
         }.GetNewClosure()
+    }
+
+    Add-Test "HTML画像DataURI MIME" {
+        Assert-Equal "image/png" (Get-ImageMimeType -Path "a.png") "png MIME"
+        Assert-Equal "image/jpeg" (Get-ImageMimeType -Path "a.jpg") "jpg MIME"
+        Assert-Equal "image/jpeg" (Get-ImageMimeType -Path "a.jpeg") "jpeg MIME"
+        Assert-Equal "image/webp" (Get-ImageMimeType -Path "a.webp") "webp MIME"
     }
 
     for ($i = 1; $i -le 10; $i++) {
