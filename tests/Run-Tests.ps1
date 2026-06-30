@@ -123,6 +123,7 @@ function Get-WorkerFunctionText {
         "Get-ProfileIconPath",
         "Get-ProfileColorPalette",
         "Get-ProfileColorInfo",
+        "Get-ProfileColorComboItemVisual",
         "Format-LastWriteTimeWithAge",
         "Get-ManagerDataPath",
         "Get-ProfileMetadataPath",
@@ -131,8 +132,30 @@ function Get-WorkerFunctionText {
         "Read-ProfileMetadata",
         "Get-ChromeProfiles",
         "Test-ShouldWriteLogToUi",
+        "New-BackupProgressState",
+        "Set-BackupProgressState",
+        "Get-BackupProgressPercent",
         "Read-Utf8JsonFile",
         "Write-Utf8JsonFile"
+    )
+    return (($functionNames | ForEach-Object {
+        "function $_ {`r`n$((Get-Command $_ -CommandType Function).Definition)`r`n}"
+    }) -join "`r`n")
+}
+
+function Get-BackupWorkerFunctionText {
+    $functionNames = @(
+        "Write-UiLog",
+        "Test-ShouldWriteLogToUi",
+        "ConvertTo-HtmlEncoded",
+        "Format-LastWriteTimeWithAge",
+        "Get-ManagerDataPath",
+        "Get-ProfileMetadataPath",
+        "Add-FileToZip",
+        "Set-BackupProgressState",
+        "Get-BackupProgressPercent",
+        "New-ProfileIndexHtmlText",
+        "New-ProfilesZipBackup"
     )
     return (($functionNames | ForEach-Object {
         "function $_ {`r`n$((Get-Command $_ -CommandType Function).Definition)`r`n}"
@@ -267,6 +290,27 @@ try {
         }.GetNewClosure()
     }
 
+    for ($i = 0; $i -lt $colorIds.Count; $i++) {
+        Add-Test "色プルダウン表示 $i" {
+            $info = Get-ProfileColorInfo -ColorId $colorIds[$i]
+            $visual = Get-ProfileColorComboItemVisual -Item $info
+            Assert-Equal $info.Id $visual.Id "プルダウン色ID"
+            Assert-Equal $info.DisplayName $visual.Text "プルダウン表示名"
+            Assert-Equal $info.Hex $visual.Hex "プルダウンHex"
+            Assert-Equal (-not [string]::IsNullOrWhiteSpace($info.Hex)) $visual.HasColor "プルダウン色有無"
+            if ($info.Hex) {
+                Assert-Equal ([System.Drawing.ColorTranslator]::FromHtml($info.Hex).ToArgb()) $visual.BackColor.ToArgb() "プルダウン背景色"
+            }
+        }.GetNewClosure()
+    }
+
+    Add-Test "色プルダウン表示 不明ID" {
+        $visual = Get-ProfileColorComboItemVisual -Item "unknown"
+        Assert-Equal "" $visual.Id "不明IDは未設定へ戻します。"
+        Assert-Equal "未設定" $visual.Text "不明IDの表示名"
+        Assert-True (-not $visual.HasColor) "不明IDに色が付いています。"
+    }
+
     for ($i = 0; $i -le 10; $i++) {
         Add-Test "更新日時相対表示 $i" {
             $date = (Get-Date).Date.AddDays(-1 * $i).AddHours(12)
@@ -373,6 +417,28 @@ try {
             Assert-True ($html.Contains("メモ2")) "メモ2列なし"
             Assert-True ($html.Contains("stage-$i")) "ステージなし"
             Assert-True ($html.Contains("local0@example.com")) "ユーザー名なし"
+            Assert-True ($html.Contains('<meta name="viewport"')) "viewportがありません。"
+            Assert-True ($html.Contains('class="table-wrap"')) "テーブルラッパーがありません。"
+            Assert-True ($html.Contains("min-width: 1680px")) "横スクロール用の最小幅がありません。"
+            Assert-True (-not $html.Contains("background:;")) "空のbackground指定があります。"
+            Assert-True (-not $html.Contains('<th style="width:')) "破綻しやすいth幅指定が残っています。"
+        }.GetNewClosure()
+    }
+
+    for ($i = 1; $i -le 10; $i++) {
+        Add-Test "ZIP進捗計算 $i" {
+            Assert-Equal 0 (Get-BackupProgressPercent -ProcessedFiles 0 -TotalFiles $i) "0%計算"
+            Assert-Equal 100 (Get-BackupProgressPercent -ProcessedFiles $i -TotalFiles $i) "100%計算"
+            Assert-Equal 0 (Get-BackupProgressPercent -ProcessedFiles 1 -TotalFiles 0) "0除算回避"
+            $state = New-BackupProgressState
+            Set-BackupProgressState -ProgressState $state -Phase "zipping" -Status "追加中" -IsIndeterminate $false -Percent 42 -ProcessedFiles $i -TotalFiles ($i * 2) -AddedFiles $i -SkippedFiles 1
+            Assert-Equal "zipping" $state.Phase "進捗フェーズ"
+            Assert-Equal "追加中" $state.Status "進捗状態"
+            Assert-Equal 42 $state.Percent "進捗率"
+            Assert-Equal $i $state.ProcessedFiles "処理数"
+            Assert-Equal ($i * 2) $state.TotalFiles "総数"
+            Assert-Equal $i $state.AddedFiles "追加数"
+            Assert-Equal 1 $state.SkippedFiles "スキップ数"
         }.GetNewClosure()
     }
 
@@ -382,8 +448,14 @@ try {
             $backup = Join-Path $testRoot "zip_backups_$i"
             Set-ProfileMetadataEntry -UserDataPath $root -DirectoryName "Default" -ColorId "red" -Memo1 "zipメモ1-$i" -Memo2 "zipメモ2-$i"
             $profiles = Get-ChromeProfiles -UserDataPath $root -SkipIconImage
-            $result = New-ProfilesZipBackup -Profiles $profiles -UserDataPath $root -BackupPath $backup -Stage "test$i"
+            $progress = New-BackupProgressState
+            $result = New-ProfilesZipBackup -Profiles $profiles -UserDataPath $root -BackupPath $backup -Stage "test$i" -ProgressState $progress
             Assert-True (Test-Path -LiteralPath $result.ZipPath) "ZIPがありません。"
+            Assert-True $progress.Completed "進捗が完了になっていません。"
+            Assert-Equal 100 $progress.Percent "進捗が100%ではありません。"
+            Assert-Equal $result.AddedFiles $progress.AddedFiles "進捗の追加数"
+            Assert-Equal $result.SkippedFiles $progress.SkippedFiles "進捗のスキップ数"
+            Assert-Equal $result.TotalFiles $progress.TotalFiles "進捗の総数"
             $zip = [System.IO.Compression.ZipFile]::OpenRead($result.ZipPath)
             try {
                 $names = @($zip.Entries | ForEach-Object FullName)
@@ -394,6 +466,37 @@ try {
             } finally {
                 $zip.Dispose()
             }
+        }.GetNewClosure()
+    }
+
+    for ($i = 1; $i -le 5; $i++) {
+        Add-Test "ZIP Runspace非同期互換 $i" {
+            $root = New-TestUserData -ProfileCount 2 -RootName "zip_async_$i"
+            $backup = Join-Path $testRoot "zip_async_backups_$i"
+            $profiles = Get-ChromeProfiles -UserDataPath $root -SkipIconImage
+            $progress = New-BackupProgressState
+            $functionText = Get-BackupWorkerFunctionText
+            $workerScript = @"
+param([object[]]`$WorkerProfiles, [string]`$WorkerUserDataPath, [string]`$WorkerBackupPath, [hashtable]`$WorkerProgressState, [string]`$WorkerLogFilePath)
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+`$script:LogBox = `$null
+`$script:LogFilePath = `$WorkerLogFilePath
+`$script:ShowDebugLogsInUi = `$false
+$functionText
+New-ProfilesZipBackup -Profiles `$WorkerProfiles -UserDataPath `$WorkerUserDataPath -BackupPath `$WorkerBackupPath -Stage "async$i" -ProgressState `$WorkerProgressState
+"@
+            $ps = [System.Management.Automation.PowerShell]::Create()
+            [void]$ps.AddScript($workerScript).AddArgument($profiles).AddArgument($root).AddArgument($backup).AddArgument($progress).AddArgument($script:LogFilePath)
+            $async = $ps.BeginInvoke()
+            while (-not $async.IsCompleted) {
+                Start-Sleep -Milliseconds 20
+            }
+            $result = $ps.EndInvoke($async) | Select-Object -First 1
+            $ps.Dispose()
+            Assert-True (Test-Path -LiteralPath $result.ZipPath) "Runspace ZIPがありません。"
+            Assert-True $progress.Completed "Runspace進捗が完了になっていません。"
+            Assert-Equal 100 $progress.Percent "Runspace進捗が100%ではありません。"
         }.GetNewClosure()
     }
 

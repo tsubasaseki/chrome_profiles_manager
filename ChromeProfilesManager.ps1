@@ -112,6 +112,85 @@ function Get-ProfileColorInfo {
     return $match
 }
 
+function Get-ProfileColorComboItemVisual {
+    param([AllowNull()]$Item)
+
+    $id = ""
+    $displayName = "未設定"
+    $hex = ""
+
+    if ($null -ne $Item) {
+        if ($Item.PSObject.Properties.Name -contains "Id") {
+            $id = [string]$Item.Id
+        } else {
+            $id = [string]$Item
+        }
+
+        $colorInfo = Get-ProfileColorInfo -ColorId $id
+        $id = [string]$colorInfo.Id
+        $displayName = [string]$colorInfo.DisplayName
+        $hex = [string]$colorInfo.Hex
+    }
+
+    $backColor = [System.Drawing.Color]::White
+    if (-not [string]::IsNullOrWhiteSpace($hex)) {
+        $backColor = [System.Drawing.ColorTranslator]::FromHtml($hex)
+    }
+
+    return [pscustomobject]@{
+        Id = $id
+        Text = $displayName
+        Hex = $hex
+        BackColor = $backColor
+        ForeColor = [System.Drawing.Color]::Black
+        HasColor = (-not [string]::IsNullOrWhiteSpace($hex))
+    }
+}
+
+function Set-ProfileColorComboBoxOwnerDraw {
+    param([System.Windows.Forms.ComboBox]$ComboBox)
+
+    if ($null -eq $ComboBox -or [string]$ComboBox.Tag -eq "ProfileColorOwnerDraw") {
+        return
+    }
+
+    $ComboBox.Tag = "ProfileColorOwnerDraw"
+    $ComboBox.DrawMode = [System.Windows.Forms.DrawMode]::OwnerDrawFixed
+    $ComboBox.ItemHeight = 24
+    $ComboBox.Add_DrawItem({
+        param($Sender, $EventArgs)
+
+        if ($EventArgs.Index -lt 0) {
+            return
+        }
+
+        $visual = Get-ProfileColorComboItemVisual -Item $Sender.Items[$EventArgs.Index]
+        $bounds = $EventArgs.Bounds
+        $backgroundBrush = New-Object System.Drawing.SolidBrush($visual.BackColor)
+        $textBrush = New-Object System.Drawing.SolidBrush($visual.ForeColor)
+        $borderPen = New-Object System.Drawing.Pen([System.Drawing.Color]::Silver)
+        try {
+            $EventArgs.Graphics.FillRectangle($backgroundBrush, $bounds)
+
+            $swatch = New-Object System.Drawing.Rectangle(($bounds.Left + 4), ($bounds.Top + 4), 18, ([Math]::Max(12, $bounds.Height - 8)))
+            if ($visual.HasColor) {
+                $EventArgs.Graphics.FillRectangle($backgroundBrush, $swatch)
+            } else {
+                $EventArgs.Graphics.FillRectangle([System.Drawing.Brushes]::White, $swatch)
+            }
+            $EventArgs.Graphics.DrawRectangle($borderPen, $swatch)
+
+            $textPoint = New-Object System.Drawing.PointF(($bounds.Left + 28), ($bounds.Top + 4))
+            $EventArgs.Graphics.DrawString($visual.Text, $Sender.Font, $textBrush, $textPoint)
+            $EventArgs.DrawFocusRectangle()
+        } finally {
+            $backgroundBrush.Dispose()
+            $textBrush.Dispose()
+            $borderPen.Dispose()
+        }
+    })
+}
+
 function Get-ManagerDataPath {
     param([string]$UserDataPath)
     return Join-Path $UserDataPath "_ChromeProfilesManager"
@@ -516,19 +595,24 @@ function New-ProfileIndexHtmlText {
     $createdAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $rows = New-Object System.Text.StringBuilder
     foreach ($profile in $Profiles) {
+        $colorStyle = ""
+        if (-not [string]::IsNullOrWhiteSpace($profile.ColorHex)) {
+            $colorStyle = " style='background-color:$((ConvertTo-HtmlEncoded $profile.ColorHex));'"
+        }
+
         [void]$rows.AppendLine("<tr>")
-        [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.DirectoryName))</td>")
+        [void]$rows.AppendLine("<td class='directory'>$((ConvertTo-HtmlEncoded $profile.DirectoryName))</td>")
         [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.DisplayName))</td>")
         [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.ProfileName))</td>")
-        [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.UserName))</td>")
+        [void]$rows.AppendLine("<td class='email'>$((ConvertTo-HtmlEncoded $profile.UserName))</td>")
         [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.GaiaName))</td>")
-        [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.AvatarIcon))</td>")
-        [void]$rows.AppendLine("<td style='background:$((ConvertTo-HtmlEncoded $profile.ColorHex));'>$((ConvertTo-HtmlEncoded $profile.ColorName))</td>")
-        [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.Memo1))</td>")
-        [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded $profile.Memo2))</td>")
+        [void]$rows.AppendLine("<td class='avatar'>$((ConvertTo-HtmlEncoded $profile.AvatarIcon))</td>")
+        [void]$rows.AppendLine("<td class='color'$colorStyle>$((ConvertTo-HtmlEncoded $profile.ColorName))</td>")
+        [void]$rows.AppendLine("<td class='memo'>$((ConvertTo-HtmlEncoded $profile.Memo1))</td>")
+        [void]$rows.AppendLine("<td class='memo'>$((ConvertTo-HtmlEncoded $profile.Memo2))</td>")
         [void]$rows.AppendLine("<td class='number'>$($profile.SizeMB)</td>")
-        [void]$rows.AppendLine("<td>$((ConvertTo-HtmlEncoded (Format-LastWriteTimeWithAge -LastWriteTime $profile.LastWriteTime)))</td>")
-        [void]$rows.AppendLine("<td><code>$((ConvertTo-HtmlEncoded $profile.Path))</code></td>")
+        [void]$rows.AppendLine("<td class='updated'>$((ConvertTo-HtmlEncoded (Format-LastWriteTimeWithAge -LastWriteTime $profile.LastWriteTime)))</td>")
+        [void]$rows.AppendLine("<td class='path'><code>$((ConvertTo-HtmlEncoded $profile.Path))</code></td>")
         [void]$rows.AppendLine("</tr>")
     }
 
@@ -537,17 +621,26 @@ function New-ProfileIndexHtmlText {
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chromeプロファイル確認レポート</title>
 <style>
-body { font-family: "Segoe UI", Meiryo, sans-serif; margin: 32px; color: #1f2933; background: #f7f9fb; }
-main { max-width: 1200px; margin: 0 auto; background: #fff; border: 1px solid #d9e2ec; padding: 24px; }
-h1 { margin-top: 0; font-size: 24px; }
-.meta { color: #52616b; line-height: 1.7; }
-table { width: 100%; border-collapse: collapse; margin-top: 20px; table-layout: fixed; }
-th, td { border: 1px solid #d9e2ec; padding: 8px 10px; vertical-align: top; word-break: break-all; }
-th { background: #eef3f8; text-align: left; }
-.number { text-align: right; }
-code { font-family: Consolas, "Courier New", monospace; }
+body { font-family: "Segoe UI", Meiryo, sans-serif; margin: 0; color: #1f2933; background: #f7f9fb; }
+main { width: min(100% - 32px, 1440px); margin: 0 auto; background: #fff; border: 1px solid #d9e2ec; padding: 24px; box-sizing: border-box; min-height: 100vh; }
+h1 { margin: 0 0 14px; font-size: 24px; }
+.meta { color: #52616b; line-height: 1.7; overflow-wrap: anywhere; }
+.table-wrap { margin-top: 20px; overflow-x: auto; border: 1px solid #d9e2ec; }
+table { width: 100%; min-width: 1680px; border-collapse: collapse; table-layout: auto; }
+th, td { border: 1px solid #d9e2ec; padding: 7px 9px; vertical-align: top; overflow-wrap: anywhere; word-break: normal; font-size: 13px; }
+th { position: sticky; top: 0; z-index: 1; background: #eef3f8; text-align: left; white-space: nowrap; }
+.directory { min-width: 120px; }
+.email { min-width: 180px; }
+.avatar { min-width: 190px; }
+.color { min-width: 78px; text-align: center; font-weight: 600; }
+.memo { min-width: 160px; }
+.updated { min-width: 190px; white-space: nowrap; }
+.path { min-width: 360px; }
+.number { min-width: 86px; text-align: right; white-space: nowrap; }
+code { font-family: Consolas, "Courier New", monospace; white-space: normal; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -559,20 +652,35 @@ code { font-family: Consolas, "Courier New", monospace; }
 User Data: <code>$((ConvertTo-HtmlEncoded $UserDataPath))</code><br>
 プロファイル数: $($Profiles.Count)
 </div>
+<div class="table-wrap">
 <table>
+<colgroup>
+<col style="width: 130px;">
+<col style="width: 150px;">
+<col style="width: 150px;">
+<col style="width: 210px;">
+<col style="width: 160px;">
+<col style="width: 220px;">
+<col style="width: 90px;">
+<col style="width: 180px;">
+<col style="width: 180px;">
+<col style="width: 96px;">
+<col style="width: 200px;">
+<col style="width: 420px;">
+</colgroup>
 <thead>
 <tr>
-<th style="width: 11%;">ディレクトリ</th>
-<th style="width: 13%;">表示名</th>
-<th style="width: 13%;">ProfileName</th>
-<th style="width: 16%;">ログインユーザー</th>
-<th style="width: 13%;">Google名</th>
-<th style="width: 12%;">アイコン</th>
-<th style="width: 8%;">色</th>
-<th style="width: 14%;">メモ1</th>
-<th style="width: 14%;">メモ2</th>
-<th style="width: 8%;">サイズMB</th>
-<th style="width: 14%;">更新日時</th>
+<th>ディレクトリ</th>
+<th>表示名</th>
+<th>ProfileName</th>
+<th>ログインユーザー</th>
+<th>Google名</th>
+<th>アイコン</th>
+<th>色</th>
+<th>メモ1</th>
+<th>メモ2</th>
+<th>サイズMB</th>
+<th>更新日時</th>
 <th>場所</th>
 </tr>
 </thead>
@@ -580,6 +688,7 @@ User Data: <code>$((ConvertTo-HtmlEncoded $UserDataPath))</code><br>
 $($rows.ToString())
 </tbody>
 </table>
+</div>
 </main>
 </body>
 </html>
@@ -627,12 +736,89 @@ function Add-FileToZip {
     }
 }
 
+function New-BackupProgressState {
+    return [hashtable]::Synchronized(@{
+        Phase = "idle"
+        Status = "待機中"
+        IsIndeterminate = $false
+        Percent = 0
+        CurrentProfile = ""
+        CurrentFile = ""
+        ProfileIndex = 0
+        TotalProfiles = 0
+        ProcessedFiles = 0
+        TotalFiles = 0
+        AddedFiles = 0
+        SkippedFiles = 0
+        Completed = $false
+        Failed = $false
+        ErrorMessage = ""
+        ZipPath = ""
+    })
+}
+
+function Set-BackupProgressState {
+    param(
+        [AllowNull()][hashtable]$ProgressState,
+        [string]$Phase,
+        [string]$Status,
+        [AllowNull()][object]$IsIndeterminate,
+        [AllowNull()][object]$Percent,
+        [string]$CurrentProfile,
+        [string]$CurrentFile,
+        [AllowNull()][object]$ProfileIndex,
+        [AllowNull()][object]$TotalProfiles,
+        [AllowNull()][object]$ProcessedFiles,
+        [AllowNull()][object]$TotalFiles,
+        [AllowNull()][object]$AddedFiles,
+        [AllowNull()][object]$SkippedFiles,
+        [AllowNull()][object]$Completed,
+        [AllowNull()][object]$Failed,
+        [string]$ErrorMessage,
+        [string]$ZipPath
+    )
+
+    if ($null -eq $ProgressState) {
+        return
+    }
+
+    if ($PSBoundParameters.ContainsKey("Phase")) { $ProgressState.Phase = $Phase }
+    if ($PSBoundParameters.ContainsKey("Status")) { $ProgressState.Status = $Status }
+    if ($PSBoundParameters.ContainsKey("IsIndeterminate") -and $null -ne $IsIndeterminate) { $ProgressState.IsIndeterminate = [bool]$IsIndeterminate }
+    if ($PSBoundParameters.ContainsKey("Percent") -and $null -ne $Percent) { $ProgressState.Percent = [Math]::Max(0, [Math]::Min(100, [int]$Percent)) }
+    if ($PSBoundParameters.ContainsKey("CurrentProfile")) { $ProgressState.CurrentProfile = $CurrentProfile }
+    if ($PSBoundParameters.ContainsKey("CurrentFile")) { $ProgressState.CurrentFile = $CurrentFile }
+    if ($PSBoundParameters.ContainsKey("ProfileIndex") -and $null -ne $ProfileIndex) { $ProgressState.ProfileIndex = [int]$ProfileIndex }
+    if ($PSBoundParameters.ContainsKey("TotalProfiles") -and $null -ne $TotalProfiles) { $ProgressState.TotalProfiles = [int]$TotalProfiles }
+    if ($PSBoundParameters.ContainsKey("ProcessedFiles") -and $null -ne $ProcessedFiles) { $ProgressState.ProcessedFiles = [int]$ProcessedFiles }
+    if ($PSBoundParameters.ContainsKey("TotalFiles") -and $null -ne $TotalFiles) { $ProgressState.TotalFiles = [int]$TotalFiles }
+    if ($PSBoundParameters.ContainsKey("AddedFiles") -and $null -ne $AddedFiles) { $ProgressState.AddedFiles = [int]$AddedFiles }
+    if ($PSBoundParameters.ContainsKey("SkippedFiles") -and $null -ne $SkippedFiles) { $ProgressState.SkippedFiles = [int]$SkippedFiles }
+    if ($PSBoundParameters.ContainsKey("Completed") -and $null -ne $Completed) { $ProgressState.Completed = [bool]$Completed }
+    if ($PSBoundParameters.ContainsKey("Failed") -and $null -ne $Failed) { $ProgressState.Failed = [bool]$Failed }
+    if ($PSBoundParameters.ContainsKey("ErrorMessage")) { $ProgressState.ErrorMessage = $ErrorMessage }
+    if ($PSBoundParameters.ContainsKey("ZipPath")) { $ProgressState.ZipPath = $ZipPath }
+}
+
+function Get-BackupProgressPercent {
+    param(
+        [int]$ProcessedFiles,
+        [int]$TotalFiles
+    )
+
+    if ($TotalFiles -le 0) {
+        return 0
+    }
+    return [Math]::Max(0, [Math]::Min(100, [int][Math]::Floor(($ProcessedFiles / $TotalFiles) * 100)))
+}
+
 function New-ProfilesZipBackup {
     param(
         [object[]]$Profiles,
         [string]$UserDataPath,
         [string]$BackupPath,
-        [string]$Stage
+        [string]$Stage,
+        [AllowNull()][hashtable]$ProgressState = $null
     )
 
     if (-not (Test-Path -LiteralPath $BackupPath)) {
@@ -645,12 +831,46 @@ function New-ProfilesZipBackup {
         Remove-Item -LiteralPath $zipPath -Force
     }
 
+    Set-BackupProgressState -ProgressState $ProgressState -Phase "counting" -Status "ZIP対象ファイルを確認中..." -IsIndeterminate $true -TotalProfiles $Profiles.Count -ProcessedFiles 0 -TotalFiles 0 -AddedFiles 0 -SkippedFiles 0 -ZipPath $zipPath
+
+    $fileTasks = New-Object System.Collections.Generic.List[object]
+    $localState = Join-Path $UserDataPath "Local State"
+    if (Test-Path -LiteralPath $localState) {
+        $fileTasks.Add([pscustomobject]@{ SourceFile = $localState; EntryName = "Local State"; ProfileName = ""; ProfileIndex = 0 }) | Out-Null
+    }
+
+    $metadataPath = Get-ProfileMetadataPath -UserDataPath $UserDataPath
+    if (Test-Path -LiteralPath $metadataPath) {
+        $fileTasks.Add([pscustomobject]@{ SourceFile = $metadataPath; EntryName = "ChromeProfilesManager/profile_metadata.json"; ProfileName = ""; ProfileIndex = 0 }) | Out-Null
+    }
+
+    $profileIndex = 0
+    foreach ($profile in $Profiles) {
+        $profileIndex++
+        Set-BackupProgressState -ProgressState $ProgressState -Phase "counting" -Status "ZIP対象確認中: $($profile.DirectoryName) ($profileIndex / $($Profiles.Count))" -CurrentProfile $profile.DirectoryName -ProfileIndex $profileIndex
+        $root = $profile.Path
+        if ([string]::IsNullOrWhiteSpace($root) -or -not (Test-Path -LiteralPath $root)) {
+            Write-UiLog "ZIP対象プロファイルが見つかりません: $($profile.DirectoryName) Path=$root" "WARN"
+            continue
+        }
+        $rootLength = $root.TrimEnd("\").Length
+        Get-ChildItem -LiteralPath $root -Force -Recurse -File -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $relative = $_.FullName.Substring($rootLength).TrimStart("\")
+                $entryName = Join-Path ("Profiles\" + $profile.DirectoryName) $relative
+                $fileTasks.Add([pscustomobject]@{ SourceFile = $_.FullName; EntryName = $entryName; ProfileName = $profile.DirectoryName; ProfileIndex = $profileIndex }) | Out-Null
+            }
+    }
+
     $html = New-ProfileIndexHtmlText -Profiles $Profiles -UserDataPath $UserDataPath -Stage $Stage
     $zip = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)
     $added = 0
     $skipped = 0
+    $processed = 0
+    $totalFiles = $fileTasks.Count + 1
 
     try {
+        Set-BackupProgressState -ProgressState $ProgressState -Phase "zipping" -Status "HTMLレポートをZIPに追加中..." -IsIndeterminate $false -Percent 0 -ProcessedFiles 0 -TotalFiles $totalFiles -CurrentProfile "" -CurrentFile "ChromeProfilesReport.html"
         $htmlEntry = $zip.CreateEntry("ChromeProfilesReport.html", [System.IO.Compression.CompressionLevel]::Optimal)
         $writer = New-Object System.IO.StreamWriter($htmlEntry.Open(), [System.Text.Encoding]::UTF8)
         try {
@@ -658,49 +878,33 @@ function New-ProfilesZipBackup {
         } finally {
             $writer.Dispose()
         }
+        $added++
+        $processed++
+        Set-BackupProgressState -ProgressState $ProgressState -Phase "zipping" -Status "ZIPへ追加中: HTMLレポート" -Percent (Get-BackupProgressPercent -ProcessedFiles $processed -TotalFiles $totalFiles) -ProcessedFiles $processed -AddedFiles $added -SkippedFiles $skipped
 
-        $localState = Join-Path $UserDataPath "Local State"
-        if (Test-Path -LiteralPath $localState) {
-            if (Add-FileToZip -Zip $zip -SourceFile $localState -EntryName "Local State") {
+        foreach ($task in $fileTasks) {
+            $currentProfile = [string]$task.ProfileName
+            $currentFile = [string]$task.EntryName
+
+            if (Add-FileToZip -Zip $zip -SourceFile $task.SourceFile -EntryName $task.EntryName) {
                 $added++
             } else {
                 $skipped++
             }
-        }
-
-        $metadataPath = Get-ProfileMetadataPath -UserDataPath $UserDataPath
-        if (Test-Path -LiteralPath $metadataPath) {
-            if (Add-FileToZip -Zip $zip -SourceFile $metadataPath -EntryName "ChromeProfilesManager/profile_metadata.json") {
-                $added++
-            } else {
-                $skipped++
-            }
-        }
-
-        foreach ($profile in $Profiles) {
-            Write-UiLog "ZIPへ追加中: $($profile.DirectoryName)"
-            $root = $profile.Path
-            $rootLength = $root.TrimEnd("\").Length
-            Get-ChildItem -LiteralPath $root -Force -Recurse -File -ErrorAction SilentlyContinue |
-                ForEach-Object {
-                    $relative = $_.FullName.Substring($rootLength).TrimStart("\")
-                    $entryName = Join-Path ("Profiles\" + $profile.DirectoryName) $relative
-                    if (Add-FileToZip -Zip $zip -SourceFile $_.FullName -EntryName $entryName) {
-                        $added++
-                    } else {
-                        $skipped++
-                    }
-                }
+            $processed++
+            Set-BackupProgressState -ProgressState $ProgressState -Phase "zipping" -Status "ZIPへ追加中: $currentFile" -CurrentProfile $currentProfile -CurrentFile $currentFile -ProfileIndex ([int]$task.ProfileIndex) -Percent (Get-BackupProgressPercent -ProcessedFiles $processed -TotalFiles $totalFiles) -ProcessedFiles $processed -TotalFiles $totalFiles -AddedFiles $added -SkippedFiles $skipped
         }
     } finally {
         $zip.Dispose()
     }
 
     Write-UiLog "ZIPバックアップ作成完了: Path=$zipPath Added=$added Skipped=$skipped" "INFO"
+    Set-BackupProgressState -ProgressState $ProgressState -Phase "completed" -Status "ZIPバックアップ作成完了" -IsIndeterminate $false -Percent 100 -ProcessedFiles $processed -TotalFiles $totalFiles -AddedFiles $added -SkippedFiles $skipped -Completed $true -ZipPath $zipPath
     return [pscustomobject]@{
         ZipPath = $zipPath
         AddedFiles = $added
         SkippedFiles = $skipped
+        TotalFiles = $totalFiles
     }
 }
 
@@ -868,6 +1072,73 @@ function Test-ProfileRefreshBusy {
     return ($script:ProfileRefreshState -and -not $script:ProfileRefreshState.AsyncResult.IsCompleted)
 }
 
+function Test-BackupBusy {
+    return ($script:BackupState -and -not $script:BackupState.AsyncResult.IsCompleted)
+}
+
+function Set-BackupBusy {
+    param([bool]$Busy)
+
+    foreach ($button in @($script:InitialBackupButton, $script:PostCleanupBackupButton)) {
+        if ($button) {
+            $button.Enabled = -not $Busy
+        }
+    }
+
+    if ($script:BackupProgressBar) {
+        if ($Busy) {
+            $script:BackupProgressBar.Visible = $true
+        } else {
+            $script:BackupProgressBar.Style = [System.Windows.Forms.ProgressBarStyle]::Continuous
+            $script:BackupProgressBar.Value = 0
+        }
+    }
+
+    if ($script:BackupProgressLabel -and -not $Busy) {
+        $script:BackupProgressLabel.Text = "ZIP待機中"
+        $script:BackupProgressLabel.ForeColor = [System.Drawing.Color]::DimGray
+    }
+}
+
+function Update-BackupProgressUi {
+    param([AllowNull()][hashtable]$ProgressState)
+
+    if ($null -eq $ProgressState) {
+        return
+    }
+
+    if ($script:BackupProgressBar) {
+        if ($ProgressState.IsIndeterminate) {
+            $script:BackupProgressBar.Style = [System.Windows.Forms.ProgressBarStyle]::Marquee
+            $script:BackupProgressBar.MarqueeAnimationSpeed = 30
+        } else {
+            $script:BackupProgressBar.Style = [System.Windows.Forms.ProgressBarStyle]::Continuous
+            $script:BackupProgressBar.MarqueeAnimationSpeed = 0
+            $value = [int]$ProgressState.Percent
+            $script:BackupProgressBar.Value = [Math]::Max($script:BackupProgressBar.Minimum, [Math]::Min($script:BackupProgressBar.Maximum, $value))
+        }
+    }
+
+    if ($script:BackupProgressLabel) {
+        $profilePart = ""
+        if (-not [string]::IsNullOrWhiteSpace($ProgressState.CurrentProfile)) {
+            $profilePart = " / $($ProgressState.CurrentProfile)"
+        }
+        $countPart = ""
+        if ([int]$ProgressState.TotalFiles -gt 0) {
+            $countPart = " $($ProgressState.ProcessedFiles)/$($ProgressState.TotalFiles)件"
+        }
+        $script:BackupProgressLabel.Text = "$($ProgressState.Status)$profilePart$countPart 追加:$($ProgressState.AddedFiles) スキップ:$($ProgressState.SkippedFiles)"
+        if ($ProgressState.Failed) {
+            $script:BackupProgressLabel.ForeColor = [System.Drawing.Color]::DarkRed
+        } elseif ($ProgressState.Completed) {
+            $script:BackupProgressLabel.ForeColor = [System.Drawing.Color]::DarkGreen
+        } else {
+            $script:BackupProgressLabel.ForeColor = [System.Drawing.Color]::DarkOrange
+        }
+    }
+}
+
 function Start-ProfileRefresh {
     if (Test-ProfileRefreshBusy) {
         Write-UiLog "プロファイル読み込みはすでに実行中です。"
@@ -990,6 +1261,10 @@ function Start-Backup {
         [System.Windows.Forms.MessageBox]::Show("プロファイル読み込み中です。完了後に実行してください。", $script:AppName) | Out-Null
         return
     }
+    if (Test-BackupBusy) {
+        [System.Windows.Forms.MessageBox]::Show("ZIPバックアップ作成中です。完了後に実行してください。", $script:AppName) | Out-Null
+        return
+    }
 
     $profiles = Get-AllProfilesFromGrid
     if ($profiles.Count -eq 0) {
@@ -1003,21 +1278,113 @@ function Start-Backup {
     }
 
     $script:Form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
-    $script:Form.Enabled = $false
-    try {
-        Write-UiLog "$Stage バックアップを開始します..."
-        $result = New-ProfilesZipBackup -Profiles $profiles -UserDataPath $script:UserDataTextBox.Text.Trim() -BackupPath $script:BackupPathTextBox.Text.Trim() -Stage $Stage
-        Write-UiLog "バックアップを作成しました: $($result.ZipPath)"
-        Write-UiLog "追加ファイル: $($result.AddedFiles); スキップ: $($result.SkippedFiles)"
-        Refresh-ZipList
-        [System.Windows.Forms.MessageBox]::Show("バックアップを作成しました:`r`n$($result.ZipPath)", $script:AppName) | Out-Null
-    } catch {
-        Write-UiLog "バックアップに失敗しました: $($_.Exception.Message)"
-        [System.Windows.Forms.MessageBox]::Show("バックアップに失敗しました:`r`n$($_.Exception.Message)", $script:AppName, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
-    } finally {
-        $script:Form.Enabled = $true
-        $script:Form.Cursor = [System.Windows.Forms.Cursors]::Default
+    Set-BackupBusy -Busy $true
+
+    $userDataPath = $script:UserDataTextBox.Text.Trim()
+    $backupPath = $script:BackupPathTextBox.Text.Trim()
+    $progressState = New-BackupProgressState
+    Set-BackupProgressState -ProgressState $progressState -Phase "starting" -Status "$Stage バックアップを開始しています..." -IsIndeterminate $true -TotalProfiles $profiles.Count
+    Update-BackupProgressUi -ProgressState $progressState
+
+    $workerProfiles = @($profiles | ForEach-Object {
+        [pscustomobject]@{
+            DirectoryName = [string]$_.DirectoryName
+            DisplayName = [string]$_.DisplayName
+            ProfileName = [string]$_.ProfileName
+            UserName = [string]$_.UserName
+            GaiaName = [string]$_.GaiaName
+            AvatarIcon = [string]$_.AvatarIcon
+            ColorId = [string]$_.ColorId
+            ColorName = [string]$_.ColorName
+            ColorHex = [string]$_.ColorHex
+            Memo1 = [string]$_.Memo1
+            Memo2 = [string]$_.Memo2
+            Path = [string]$_.Path
+            SizeBytes = [int64]$_.SizeBytes
+            SizeMB = $_.SizeMB
+            LastWriteTime = $_.LastWriteTime
+        }
+    })
+
+    $functionNames = @(
+        "Write-UiLog",
+        "Test-ShouldWriteLogToUi",
+        "ConvertTo-HtmlEncoded",
+        "Format-LastWriteTimeWithAge",
+        "Get-ManagerDataPath",
+        "Get-ProfileMetadataPath",
+        "Add-FileToZip",
+        "Set-BackupProgressState",
+        "Get-BackupProgressPercent",
+        "New-ProfileIndexHtmlText",
+        "New-ProfilesZipBackup"
+    )
+    $functionText = ($functionNames | ForEach-Object {
+        "function $_ {`r`n$((Get-Command $_ -CommandType Function).Definition)`r`n}"
+    }) -join "`r`n"
+
+    $workerScript = @"
+param([object[]]`$WorkerProfiles, [string]`$WorkerUserDataPath, [string]`$WorkerBackupPath, [string]`$WorkerStage, [hashtable]`$WorkerProgressState, [string]`$WorkerLogFilePath)
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+`$script:LogBox = `$null
+`$script:LogFilePath = `$WorkerLogFilePath
+`$script:ShowDebugLogsInUi = `$false
+$functionText
+try {
+    New-ProfilesZipBackup -Profiles `$WorkerProfiles -UserDataPath `$WorkerUserDataPath -BackupPath `$WorkerBackupPath -Stage `$WorkerStage -ProgressState `$WorkerProgressState
+} catch {
+    Set-BackupProgressState -ProgressState `$WorkerProgressState -Phase "failed" -Status "ZIPバックアップに失敗しました" -IsIndeterminate `$false -Failed `$true -ErrorMessage `$_.Exception.Message
+    throw
+}
+"@
+
+    $powerShell = [System.Management.Automation.PowerShell]::Create()
+    [void]$powerShell.AddScript($workerScript).AddArgument($workerProfiles).AddArgument($userDataPath).AddArgument($backupPath).AddArgument($Stage).AddArgument($progressState).AddArgument($script:LogFilePath)
+    $asyncResult = $powerShell.BeginInvoke()
+
+    $timer = New-Object System.Windows.Forms.Timer
+    $timer.Interval = 250
+    $timer.Add_Tick({
+        if (-not $script:BackupState) {
+            return
+        }
+
+        Update-BackupProgressUi -ProgressState $script:BackupState.ProgressState
+        if (-not $script:BackupState.AsyncResult.IsCompleted) {
+            return
+        }
+
+        $script:BackupState.Timer.Stop()
+        try {
+            $result = $script:BackupState.PowerShell.EndInvoke($script:BackupState.AsyncResult) | Select-Object -First 1
+            Update-BackupProgressUi -ProgressState $script:BackupState.ProgressState
+            Write-UiLog "バックアップを作成しました: $($result.ZipPath)"
+            Write-UiLog "追加ファイル: $($result.AddedFiles); スキップ: $($result.SkippedFiles); 対象: $($result.TotalFiles)"
+            Refresh-ZipList
+            [System.Windows.Forms.MessageBox]::Show("バックアップを作成しました:`r`n$($result.ZipPath)", $script:AppName) | Out-Null
+        } catch {
+            Set-BackupProgressState -ProgressState $script:BackupState.ProgressState -Phase "failed" -Status "ZIPバックアップに失敗しました" -IsIndeterminate $false -Failed $true -ErrorMessage $_.Exception.Message
+            Update-BackupProgressUi -ProgressState $script:BackupState.ProgressState
+            Write-UiLog "バックアップに失敗しました: $($_.Exception.Message)"
+            [System.Windows.Forms.MessageBox]::Show("バックアップに失敗しました:`r`n$($_.Exception.Message)", $script:AppName, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+        } finally {
+            $script:BackupState.PowerShell.Dispose()
+            $script:BackupState.Timer.Dispose()
+            $script:BackupState = $null
+            Set-BackupBusy -Busy $false
+            $script:Form.Cursor = [System.Windows.Forms.Cursors]::Default
+        }
+    })
+
+    $script:BackupState = [pscustomobject]@{
+        PowerShell = $powerShell
+        AsyncResult = $asyncResult
+        Timer = $timer
+        ProgressState = $progressState
     }
+    Write-UiLog "$Stage バックアップを開始しました。進捗は画面に表示します。"
+    $timer.Start()
 }
 
 function Move-SelectedProfilesToQuarantine {
@@ -1332,17 +1699,33 @@ $htmlButton.Add_Click({
 })
 $actionPanel.Controls.Add($htmlButton)
 
-$initialBackupButton = New-Object System.Windows.Forms.Button
-$initialBackupButton.Text = "初回ZIP保存"
-$initialBackupButton.Width = 115
-$initialBackupButton.Add_Click({ Start-Backup -Stage "initial" })
-$actionPanel.Controls.Add($initialBackupButton)
+$script:InitialBackupButton = New-Object System.Windows.Forms.Button
+$script:InitialBackupButton.Text = "初回ZIP保存"
+$script:InitialBackupButton.Width = 115
+$script:InitialBackupButton.Add_Click({ Start-Backup -Stage "initial" })
+$actionPanel.Controls.Add($script:InitialBackupButton)
 
-$postCleanupBackupButton = New-Object System.Windows.Forms.Button
-$postCleanupBackupButton.Text = "清掃後ZIP保存"
-$postCleanupBackupButton.Width = 125
-$postCleanupBackupButton.Add_Click({ Start-Backup -Stage "post-cleanup" })
-$actionPanel.Controls.Add($postCleanupBackupButton)
+$script:PostCleanupBackupButton = New-Object System.Windows.Forms.Button
+$script:PostCleanupBackupButton.Text = "清掃後ZIP保存"
+$script:PostCleanupBackupButton.Width = 125
+$script:PostCleanupBackupButton.Add_Click({ Start-Backup -Stage "post-cleanup" })
+$actionPanel.Controls.Add($script:PostCleanupBackupButton)
+
+$script:BackupProgressBar = New-Object System.Windows.Forms.ProgressBar
+$script:BackupProgressBar.Width = 180
+$script:BackupProgressBar.Height = 18
+$script:BackupProgressBar.Minimum = 0
+$script:BackupProgressBar.Maximum = 100
+$script:BackupProgressBar.Value = 0
+$script:BackupProgressBar.Margin = New-Object System.Windows.Forms.Padding(10, 9, 4, 0)
+$actionPanel.Controls.Add($script:BackupProgressBar)
+
+$script:BackupProgressLabel = New-Object System.Windows.Forms.Label
+$script:BackupProgressLabel.Text = "ZIP待機中"
+$script:BackupProgressLabel.AutoSize = $true
+$script:BackupProgressLabel.Margin = New-Object System.Windows.Forms.Padding(4, 10, 10, 0)
+$script:BackupProgressLabel.ForeColor = [System.Drawing.Color]::DimGray
+$actionPanel.Controls.Add($script:BackupProgressLabel)
 
 $quarantineButton = New-Object System.Windows.Forms.Button
 $quarantineButton.Text = "選択を隔離"
@@ -1459,6 +1842,18 @@ $script:ProfilesGrid.Add_CellValueChanged({
     $columnName = $script:ProfilesGrid.Columns[$EventArgs.ColumnIndex].Name
     if ($columnName -in @("ColorId", "Memo1", "Memo2")) {
         Save-ProfileMetadataFromRow -Row $script:ProfilesGrid.Rows[$EventArgs.RowIndex]
+    }
+})
+$script:ProfilesGrid.Add_EditingControlShowing({
+    param($Sender, $EventArgs)
+
+    if ($null -eq $script:ProfilesGrid.CurrentCell) {
+        return
+    }
+
+    $columnName = $script:ProfilesGrid.Columns[$script:ProfilesGrid.CurrentCell.ColumnIndex].Name
+    if ($columnName -eq "ColorId" -and $EventArgs.Control -is [System.Windows.Forms.ComboBox]) {
+        Set-ProfileColorComboBoxOwnerDraw -ComboBox $EventArgs.Control
     }
 })
 $script:ProfilesGrid.Add_DataError({
