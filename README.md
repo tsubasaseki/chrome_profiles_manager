@@ -1,4 +1,4 @@
-# ChromeProfilesManager
+﻿# ChromeProfilesManager
 
 Chrome のプロファイル整理を安全寄りに進めるための Windows GUI アプリです。PowerShell + WinForms で動くため、`.NET SDK` のビルドは不要です。
 
@@ -41,10 +41,12 @@ GitHub repository:
 - 画面ログでは DEBUG を非表示にし、詳細 DEBUG はファイルログに保存
 - アプリ専用の10色分類、メモ1、メモ2をプロファイルごとに保存
 - 色とメモは Chrome User Data 配下の `_ChromeProfilesManager\profile_metadata.json` に保存
-- 色選択は一覧のドロップダウンに加え、選択行へ直接反映できる10色ボタンでも操作可能
+- 色選択は一覧の色付きドロップダウンに加え、選択行へ直接反映できる10色ボタンでも操作可能
 - 更新日時は `yyyy-MM-dd HH:mm:ss（n日前）` の形式で表示
 - メタ情報JSONをバックアップZIPへ同梱
 - プロファイル一覧、バックアップZIP、ログ出力エリアの高さをドラッグで調整
+- ZIP保存はバックグラウンドで実行し、進捗バーと進捗ラベルを表示
+- HTMLレポートは横スクロール可能な表として生成し、長いパスやメールでも崩れにくく表示
 
 ## テスト
 
@@ -54,7 +56,7 @@ GitHub repository:
 
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1`
 
-現在のテストケース数は 238 件です。
+現在のテストケース数は 265 件です。
 
 ## 推奨作業手順
 
