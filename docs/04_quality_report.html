@@ -42,6 +42,9 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 <li>アイコン48px表示</li>
 <li>更新日時の <code>n日前</code> 表示</li>
 <li>ZIP保存のバックグラウンド化と進捗表示</li>
+<li>ZIP進捗表示と詳細ログの分離</li>
+<li>ZIP推定残り時間の表示</li>
+<li>完成ZIPの選択、内容確認、Explorerで開く操作</li>
 <li>HTMLレポートの崩れにくい表レイアウト</li>
 <li>docs の更新</li>
 <li>Markdown と対応する SingleFileHTML の再生成</li>
@@ -64,7 +67,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 <li>サイズ計算開始・完了・警告</li>
 <li>ZIP追加開始・完了・スキップ</li>
 <li>ZIPバックアップ作成開始・完了</li>
-<li>ZIP進捗の対象数、追加数、スキップ数</li>
+<li>ZIP進捗の対象数、追加数、スキップ数、推定残り時間</li>
 <li>隔離先フォルダ作成</li>
 <li>未処理エラー</li>
 </ul>
@@ -80,11 +83,11 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 <ul>
 <li><code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1</code></li>
 </ul>
-<p>現在のテストケース数は 265 件です。</p>
+<p>現在のテストケース数は 279 件です。</p>
 <p>テスト結果は次の通りです。</p>
 <ul>
-<li>合計: 265</li>
-<li>成功: 265</li>
+<li>合計: 279</li>
+<li>成功: 279</li>
 <li>失敗: 0</li>
 </ul>
 <h2>4. テスト対象</h2>
@@ -108,6 +111,8 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 <li><code>Preferences</code> がない場合のプロファイル検出</li>
 <li>HTMLレポート生成</li>
 <li>ZIP進捗計算</li>
+<li>ZIP残り時間表示</li>
+<li>ZIP進捗ラベル</li>
 <li>ZIPバックアップ生成</li>
 <li>ZIP Runspace非同期互換</li>
 <li>ディレクトリサイズ計算</li>
@@ -163,7 +168,9 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 <h3>5.12 ZIP保存中にGUIが固まる問題</h3>
 <p>ZIPバックアップ作成をUIスレッドで同期実行していたため、大きなプロファイルではGUIが固まって見える問題がありました。</p>
 <p>対応として、ZIPバックアップ作成を Runspace 上で実行し、UI側は WinForms <code>Timer</code> で進捗状態を読み取るようにしました。</p>
-<p>ファイル数確認中は進捗バーを動き続ける表示にし、総ファイル数が分かった後は百分率、処理済み件数、追加数、スキップ数を表示します。</p>
+<p>ファイル数確認中は進捗バーを動き続ける表示にし、総ファイル数が分かった後は百分率、処理済み件数、推定残り時間、追加数、スキップ数を表示します。</p>
+<p>個別ファイル名を進捗ラベルへ出すと見づらくなるため、<code>ZIPへ追加中</code> の詳細メッセージは <code>DEBUG</code> ログへ分離しました。</p>
+<p>ZIP作成完了後は完成ZIPを一覧上で選択し、そのまま内容確認できるようにしました。</p>
 <h3>5.13 HTMLレポートの表が崩れる問題</h3>
 <p>HTMLレポートの列幅指定が合計100%を超えており、12列の表と長いパスが重なって大きく崩れる問題がありました。</p>
 <p>対応として、表を横スクロール可能な <code>.table-wrap</code> で包み、<code>colgroup</code> と最小幅で列幅を安定させました。</p>
@@ -222,6 +229,9 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 - アイコン48px表示
 - 更新日時の `n日前` 表示
 - ZIP保存のバックグラウンド化と進捗表示
+- ZIP進捗表示と詳細ログの分離
+- ZIP推定残り時間の表示
+- 完成ZIPの選択、内容確認、Explorerで開く操作
 - HTMLレポートの崩れにくい表レイアウト
 - docs の更新
 - Markdown と対応する SingleFileHTML の再生成
@@ -246,7 +256,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 - サイズ計算開始・完了・警告
 - ZIP追加開始・完了・スキップ
 - ZIPバックアップ作成開始・完了
-- ZIP進捗の対象数、追加数、スキップ数
+- ZIP進捗の対象数、追加数、スキップ数、推定残り時間
 - 隔離先フォルダ作成
 - 未処理エラー
 
@@ -266,12 +276,12 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1`
 
-現在のテストケース数は 265 件です。
+現在のテストケース数は 279 件です。
 
 テスト結果は次の通りです。
 
-- 合計: 265
-- 成功: 265
+- 合計: 279
+- 成功: 279
 - 失敗: 0
 
 ## 4. テスト対象
@@ -296,6 +306,8 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 - `Preferences` がない場合のプロファイル検出
 - HTMLレポート生成
 - ZIP進捗計算
+- ZIP残り時間表示
+- ZIP進捗ラベル
 - ZIPバックアップ生成
 - ZIP Runspace非同期互換
 - ディレクトリサイズ計算
@@ -393,7 +405,11 @@ ZIPバックアップ作成をUIスレッドで同期実行していたため、
 
 対応として、ZIPバックアップ作成を Runspace 上で実行し、UI側は WinForms `Timer` で進捗状態を読み取るようにしました。
 
-ファイル数確認中は進捗バーを動き続ける表示にし、総ファイル数が分かった後は百分率、処理済み件数、追加数、スキップ数を表示します。
+ファイル数確認中は進捗バーを動き続ける表示にし、総ファイル数が分かった後は百分率、処理済み件数、推定残り時間、追加数、スキップ数を表示します。
+
+個別ファイル名を進捗ラベルへ出すと見づらくなるため、`ZIPへ追加中` の詳細メッセージは `DEBUG` ログへ分離しました。
+
+ZIP作成完了後は完成ZIPを一覧上で選択し、そのまま内容確認できるようにしました。
 
 ### 5.13 HTMLレポートの表が崩れる問題
 

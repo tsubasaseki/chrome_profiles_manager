@@ -45,7 +45,9 @@ GitHub repository:
 - 更新日時は `yyyy-MM-dd HH:mm:ss（n日前）` の形式で表示
 - メタ情報JSONをバックアップZIPへ同梱
 - プロファイル一覧、バックアップZIP、ログ出力エリアの高さをドラッグで調整
-- ZIP保存はバックグラウンドで実行し、進捗バーと進捗ラベルを表示
+- ZIP保存はバックグラウンドで実行し、全体の進捗率と推定残り時間を表示
+- ZIP追加中の詳細ファイル名はログへ出力し、進捗表示とは分離
+- 完成したZIPは一覧で選択され、内容確認やExplorerで開く操作が可能
 - HTMLレポートは横スクロール可能な表として生成し、長いパスやメールでも崩れにくく表示
 
 ## テスト
@@ -56,7 +58,7 @@ GitHub repository:
 
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1`
 
-現在のテストケース数は 265 件です。
+現在のテストケース数は 279 件です。
 
 ## 推奨作業手順
 
