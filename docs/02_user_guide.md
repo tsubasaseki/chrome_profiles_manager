@@ -32,7 +32,7 @@ Chrome の User Data フォルダの既定値は次の通りです。
 
 バックアップ先の既定値は次の通りです。
 
-- `Documents\ChromeProfilesManagerBackups`
+- `Desktop`
 
 画面上部の `Chromeデータ` と `バックアップ先` の欄で、必要に応じて変更できます。
 

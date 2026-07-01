@@ -246,10 +246,11 @@ ZIP作成用Runspaceへ渡すプロファイル情報にも `IconPath` を含め
 
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1`
 
-現在のテストケース数は 280 件です。
+現在のテストケース数は 281 件です。
 
 テスト対象は次の通りです。
 
+- 既定バックアップ先
 - HTMLエンコード
 - ファイルログ出力
 - `Local State` 解析

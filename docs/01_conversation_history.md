@@ -640,3 +640,17 @@ Codex は、次の改善を実装しました。
 この改善に合わせて、HTMLレポートに `data:image/png;base64,` が含まれること、ローカル画像パスを参照しないこと、MIMEタイプ判定のテストを追加しました。
 
 テスト件数は280件になり、すべて成功しました。
+
+## 37. 既定の保存先をデスクトップへ変更する依頼
+
+ユーザーは、デフォルトの保存先をデスクトップにするよう依頼しました。
+
+Codex は、`ChromeProfilesManager.ps1` の `$script:DefaultBackupPath` を `Documents\ChromeProfilesManagerBackups` から `[Environment]::GetFolderPath("Desktop")` に変更しました。
+
+これにより、起動直後のバックアップ先欄はデスクトップを指します。
+
+この変更に合わせて、ユーザーガイドのバックアップ先既定値も `Desktop` に更新しました。
+
+既定バックアップ先がデスクトップであることを確認するテストも追加しました。
+
+テスト件数は281件になり、すべて成功しました。

@@ -59,7 +59,7 @@ GitHub repository:
 
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1`
 
-現在のテストケース数は 280 件です。
+現在のテストケース数は 281 件です。
 
 ## 推奨作業手順
 

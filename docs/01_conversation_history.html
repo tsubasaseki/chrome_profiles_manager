@@ -554,6 +554,13 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 </ul>
 <p>この改善に合わせて、HTMLレポートに <code>data:image/png;base64,</code> が含まれること、ローカル画像パスを参照しないこと、MIMEタイプ判定のテストを追加しました。</p>
 <p>テスト件数は280件になり、すべて成功しました。</p>
+<h2>37. 既定の保存先をデスクトップへ変更する依頼</h2>
+<p>ユーザーは、デフォルトの保存先をデスクトップにするよう依頼しました。</p>
+<p>Codex は、<code>ChromeProfilesManager.ps1</code> の <code>$script:DefaultBackupPath</code> を <code>Documents\ChromeProfilesManagerBackups</code> から <code>[Environment]::GetFolderPath(&quot;Desktop&quot;)</code> に変更しました。</p>
+<p>これにより、起動直後のバックアップ先欄はデスクトップを指します。</p>
+<p>この変更に合わせて、ユーザーガイドのバックアップ先既定値も <code>Desktop</code> に更新しました。</p>
+<p>既定バックアップ先がデスクトップであることを確認するテストも追加しました。</p>
+<p>テスト件数は281件になり、すべて成功しました。</p>
 
 <details>
 <summary>対応するMarkdown原文</summary>
@@ -1199,6 +1206,20 @@ Codex は、次の改善を実装しました。
 この改善に合わせて、HTMLレポートに `data:image/png;base64,` が含まれること、ローカル画像パスを参照しないこと、MIMEタイプ判定のテストを追加しました。
 
 テスト件数は280件になり、すべて成功しました。
+
+## 37. 既定の保存先をデスクトップへ変更する依頼
+
+ユーザーは、デフォルトの保存先をデスクトップにするよう依頼しました。
+
+Codex は、`ChromeProfilesManager.ps1` の `$script:DefaultBackupPath` を `Documents\ChromeProfilesManagerBackups` から `[Environment]::GetFolderPath(&quot;Desktop&quot;)` に変更しました。
+
+これにより、起動直後のバックアップ先欄はデスクトップを指します。
+
+この変更に合わせて、ユーザーガイドのバックアップ先既定値も `Desktop` に更新しました。
+
+既定バックアップ先がデスクトップであることを確認するテストも追加しました。
+
+テスト件数は281件になり、すべて成功しました。
 </pre>
 </details>
 </main>
