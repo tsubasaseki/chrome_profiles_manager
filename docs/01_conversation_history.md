@@ -654,3 +654,22 @@ Codex は、`ChromeProfilesManager.ps1` の `$script:DefaultBackupPath` を `Doc
 既定バックアップ先がデスクトップであることを確認するテストも追加しました。
 
 テスト件数は281件になり、すべて成功しました。
+
+## 38. 完了作業としての会話履歴保存、docs更新、GitHub連携依頼
+
+ユーザーは、ここまでの会話履歴を漏れなく docs に書き出し、docs を現状の実装と不整合がないように追加・整理・修正するよう依頼しました。
+
+また、Markdown の各ドキュメントに対応する閲覧用 SingleFileHTML を、Markdown と情報差分がない形で追加・更新するよう依頼しました。ドキュメントはすべて日本語で維持する指定でした。
+
+GitHub については、`remote origin` に変更があれば pull して最新化し、作業内容ごとに細分化してコミットし、最終的にワーキングツリーを clean にしたうえで push するよう依頼しました。
+
+PAT は `T:\.secrets\github_pat.txt` を使用する指定でした。PAT の値はドキュメント、Git 設定、コミット内容には保存しません。
+
+Codex は、作業開始時に次の状態を確認しました。
+
+- ワーキングツリーは clean。
+- 現在ブランチは `master`。
+- `remote origin` は `https://github.com/tsubasaseki/chrome_profiles_manager.git`。
+- `origin/master` との差分は `0 0` で、pull が必要な未取得変更はありませんでした。
+
+その後、この会話履歴を更新し、対応する SingleFileHTML を再生成し、構文チェック、テスト、Markdown と SingleFileHTML の対応確認、コミット、push を行う作業へ進みました。

@@ -5,25 +5,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ChromeProfilesManager ユーザーガイド</title>
 <style>
-:root { color-scheme: light; }
-body { margin: 0; font-family: "Segoe UI", Meiryo, sans-serif; line-height: 1.75; color: #1f2933; background: #f4f7fa; }
-main { max-width: 980px; margin: 0 auto; padding: 32px 22px 56px; background: #ffffff; min-height: 100vh; box-sizing: border-box; }
-h1 { font-size: 28px; line-height: 1.35; margin: 0 0 24px; padding-bottom: 12px; border-bottom: 2px solid #d9e2ec; }
-h2 { font-size: 21px; margin: 34px 0 12px; padding-left: 10px; border-left: 5px solid #2f80ed; }
-h3 { font-size: 17px; margin: 26px 0 10px; }
-p { margin: 10px 0; }
-ul, ol { margin: 10px 0 16px 1.6em; padding: 0; }
-li { margin: 5px 0; }
-code { font-family: Consolas, "Courier New", monospace; background: #eef3f8; border: 1px solid #d9e2ec; padding: 1px 5px; border-radius: 4px; }
-details { margin-top: 40px; border: 1px solid #d9e2ec; background: #f8fafc; padding: 14px 16px; }
-summary { cursor: pointer; font-weight: 600; }
-pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Courier New", monospace; font-size: 13px; line-height: 1.6; }
-.meta { color: #52616b; font-size: 13px; margin-bottom: 18px; }
+:root { color-scheme: light; --bg: #f6f7f9; --paper: #ffffff; --text: #1f2937; --muted: #5b6472; --border: #d8dde6; --accent: #2563eb; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: "Yu Gothic UI", "Meiryo", "Segoe UI", sans-serif; line-height: 1.75; }
+main { max-width: 1080px; margin: 0 auto; padding: 32px 20px 56px; }
+.document { background: var(--paper); border: 1px solid var(--border); border-radius: 8px; padding: 28px; box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06); }
+h1 { font-size: 1.9rem; margin: 0 0 1rem; border-bottom: 2px solid var(--border); padding-bottom: .55rem; }
+h2 { font-size: 1.35rem; margin: 2rem 0 .6rem; border-left: 5px solid var(--accent); padding-left: .7rem; }
+h3 { font-size: 1.08rem; margin: 1.4rem 0 .4rem; }
+p { margin: .65rem 0; }
+ul, ol { padding-left: 1.55rem; margin: .6rem 0 1rem; }
+li { margin: .2rem 0; }
+code { background: #eef2f7; border: 1px solid #dde3ec; border-radius: 4px; padding: .08rem .28rem; font-family: Consolas, "Cascadia Mono", monospace; font-size: .92em; }
+pre { background: #111827; color: #f9fafb; padding: 1rem; border-radius: 8px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+details { margin-top: 2.2rem; border-top: 1px solid var(--border); padding-top: 1.2rem; }
+summary { cursor: pointer; color: var(--accent); font-weight: 700; }
+.raw-markdown { margin-top: 1rem; }
+@media (max-width: 720px) { main { padding: 16px 10px 36px; } .document { padding: 18px; } h1 { font-size: 1.5rem; } h2 { font-size: 1.18rem; } }
 </style>
 </head>
 <body>
 <main>
-<div class="meta">生成元: 02_user_guide.md</div>
+<article class="document">
 <h1>ChromeProfilesManager ユーザーガイド</h1>
 <p>この文書は、現在の実装に合わせた ChromeProfilesManager の使い方を説明します。</p>
 <h2>1. アプリの目的</h2>
@@ -205,7 +209,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, "Co
 
 <details>
 <summary>対応するMarkdown原文</summary>
-<pre># ChromeProfilesManager ユーザーガイド
+<pre class="raw-markdown"><code># ChromeProfilesManager ユーザーガイド
 
 この文書は、現在の実装に合わせた ChromeProfilesManager の使い方を説明します。
 
@@ -438,8 +442,9 @@ Chrome 起動中は、プロファイルファイルがロックされる場合�
 隔離したプロファイルを完全に削除する機能は、現在の実装にはありません。不要であることを別途確認してから、ユーザー自身が隔離フォルダを削除してください。
 
 バックアップ作成中は画面操作を一時的に無効化します。巨大なプロファイルでは時間がかかる場合があります。
-</pre>
+</code></pre>
 </details>
+</article>
 </main>
 </body>
 </html>
