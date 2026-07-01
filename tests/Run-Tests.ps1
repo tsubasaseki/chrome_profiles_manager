@@ -175,6 +175,10 @@ function Get-BackupWorkerFunctionText {
 }
 
 try {
+    Add-Test "既定バックアップ先はデスクトップ" {
+        Assert-Equal ([Environment]::GetFolderPath("Desktop")) $script:DefaultBackupPath "既定バックアップ先"
+    }
+
     $encodeCases = @(
         @("", ""),
         @("abc", "abc"),

@@ -7,7 +7,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $script:AppName = "ChromeProfilesManager"
 $script:DefaultUserDataPath = Join-Path $env:LOCALAPPDATA "Google\Chrome\User Data"
-$script:DefaultBackupPath = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "ChromeProfilesManagerBackups"
+$script:DefaultBackupPath = [Environment]::GetFolderPath("Desktop")
 $script:LogFilePath = $null
 $script:ShowDebugLogsInUi = $false
 
